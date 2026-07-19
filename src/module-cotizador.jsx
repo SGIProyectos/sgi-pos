@@ -392,8 +392,8 @@ function CotizPrintDoc({ cot, partidas, subtotal, iva, total, retIsr, retIva, ne
             </div>
             {hayRet && (
               <div style={{marginTop:8,paddingTop:6,borderTop:'1px dashed #ccc'}}>
-                <div style={S.totRow}><span>Ret. ISR 1.25% (RESICO)</span><span style={{fontFamily:'monospace'}}>− {fmt(retIsr)}</span></div>
-                <div style={S.totRow}><span>Ret. IVA 10.6667% (⅔ del IVA)</span><span style={{fontFamily:'monospace'}}>− {fmt(retIva)}</span></div>
+                {(retIsr||0) > 0 && <div style={S.totRow}><span>Ret. ISR 1.25% (RESICO)</span><span style={{fontFamily:'monospace'}}>− {fmt(retIsr)}</span></div>}
+                {(retIva||0) > 0 && <div style={S.totRow}><span>Ret. IVA 10.6667% (⅔ del IVA)</span><span style={{fontFamily:'monospace'}}>− {fmt(retIva)}</span></div>}
                 <div style={{...S.totRow,fontWeight:700,color:'#16803c'}}>
                   <span>Neto a depositar</span><span style={{fontFamily:'monospace'}}>{fmt(neto)}</span>
                 </div>
@@ -690,7 +690,8 @@ function CotizEditor({ cot: init, onBack }) {
   const total     = round2(subtotal + iva);
   // Retenciones cuando factura a persona moral (RESICO persona física, servicios)
   const retiene   = !!cot.retiene;
-  const retIsr    = retiene ? round2(subtotal * 0.0125) : 0;
+  const conIsr    = retiene && cot.retieneIsr !== false;
+  const retIsr    = conIsr  ? round2(subtotal * 0.0125) : 0;
   const retIva    = retiene ? round2(iva * 2 / 3) : 0;
   const neto      = round2(total - retIsr - retIva);
 
@@ -1032,8 +1033,14 @@ function CotizEditor({ cot: init, onBack }) {
             </label>
             {retiene && (
               <>
-                <div className="cq-total-row" style={{color:'var(--magenta)'}}>
-                  <span>Ret. ISR 1.25% (RESICO)</span><span className="mono">− {fmt(retIsr)}</span>
+                <div className="cq-total-row" style={{color:conIsr?'var(--magenta)':'var(--text-3)'}}>
+                  <label style={{display:'flex',alignItems:'center',gap:6,cursor:locked?'default':'pointer',userSelect:'none'}}>
+                    <input type="checkbox" checked={conIsr} disabled={locked}
+                      onChange={e=>setF('retieneIsr', e.target.checked)}
+                      style={{accentColor:'var(--magenta)'}}/>
+                    Ret. ISR 1.25% (RESICO)
+                  </label>
+                  <span className="mono">{conIsr ? '− ' + fmt(retIsr) : 'no aplica'}</span>
                 </div>
                 <div className="cq-total-row" style={{color:'var(--magenta)'}}>
                   <span>Ret. IVA 10.6667% (⅔)</span><span className="mono">− {fmt(retIva)}</span>
