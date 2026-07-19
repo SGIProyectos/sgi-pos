@@ -230,7 +230,7 @@ function _matchCat(desc, catalog) {
 }
 
 // ─── Documento imprimible ─────────────────────────────────────────────────────
-function CotizPrintDoc({ cot, partidas, subtotal, iva, total, retIsr, retIva, neto, logoSrc, tipo, docClass }) {
+function CotizPrintDoc({ cot, partidas, subtotal, iva, total, retIsr, retIva, logoSrc, tipo, docClass }) {
   const logoUrl = logoSrc || (window.location.origin + '/logosgi.jpg');
   const esOrden = tipo === 'orden';
   const hayRet  = (retIsr || 0) > 0 || (retIva || 0) > 0;
@@ -386,17 +386,15 @@ function CotizPrintDoc({ cot, partidas, subtotal, iva, total, retIsr, retIva, ne
             {[['Subtotal',fmt(subtotal)],['IVA 16%',fmt(iva)]].map(([l,v])=>(
               <div key={l} style={S.totRow}><span>{l}</span><span style={{fontFamily:'monospace'}}>{v}</span></div>
             ))}
+            {(retIsr||0) > 0 && <div style={S.totRow}><span>I.S.R. retenido 1.25%</span><span style={{fontFamily:'monospace'}}>− {fmt(retIsr)}</span></div>}
+            {(retIva||0) > 0 && <div style={S.totRow}><span>IVA retenido 10.6667%</span><span style={{fontFamily:'monospace'}}>− {fmt(retIva)}</span></div>}
             <div style={S.totFin}>
               <strong style={{fontFamily:'Archivo Black,Arial,sans-serif',fontSize:13}}>TOTAL</strong>
               <strong style={{fontFamily:'monospace',fontSize:15,color:'#E85D04'}}>{fmt(total)}</strong>
             </div>
             {hayRet && (
-              <div style={{marginTop:8,paddingTop:6,borderTop:'1px dashed #ccc'}}>
-                {(retIsr||0) > 0 && <div style={S.totRow}><span>Ret. ISR 1.25% (RESICO)</span><span style={{fontFamily:'monospace'}}>− {fmt(retIsr)}</span></div>}
-                {(retIva||0) > 0 && <div style={S.totRow}><span>Ret. IVA 10.6667% (⅔ del IVA)</span><span style={{fontFamily:'monospace'}}>− {fmt(retIva)}</span></div>}
-                <div style={{...S.totRow,fontWeight:700,color:'#16803c'}}>
-                  <span>Neto a depositar</span><span style={{fontFamily:'monospace'}}>{fmt(neto)}</span>
-                </div>
+              <div style={{fontSize:8.5,color:'#16803c',textAlign:'right',marginTop:3}}>
+                Total con impuestos retenidos descontados (igual que el CFDI)
               </div>
             )}
           </div>
@@ -687,13 +685,15 @@ function CotizEditor({ cot: init, onBack }) {
   const partidas  = cot.partidas || [];
   const subtotal  = round2(partidas.reduce((s,p) => s+(p.subtotal||0), 0));
   const iva       = round2(subtotal * 0.16);
-  const total     = round2(subtotal + iva);
-  // Retenciones cuando factura a persona moral (RESICO persona física, servicios)
+  // Retenciones al facturar a persona moral: ISR 1.25% siempre (Art. 113-J, RESICO);
+  // IVA retenido solo si facturan como servicio personal (raro — opcional, apagado)
   const retiene   = !!cot.retiene;
   const conIsr    = retiene && cot.retieneIsr !== false;
-  const retIsr    = conIsr  ? round2(subtotal * 0.0125) : 0;
-  const retIva    = retiene ? round2(iva * 2 / 3) : 0;
-  const neto      = round2(total - retIsr - retIva);
+  const conIvaRet = retiene && !!cot.retieneIva;
+  const retIsr    = conIsr    ? round2(subtotal * 0.0125) : 0;
+  const retIva    = conIvaRet ? round2(iva * 2 / 3) : 0;
+  // Igual que el CFDI: Total = Subtotal + IVA − retenciones (es lo que deposita el cliente)
+  const total     = round2(subtotal + iva - retIsr - retIva);
 
   React.useEffect(() => { if (sections.length && !secTab) setSecTab(sections[0].id); }, [sections]);
 
@@ -1019,11 +1019,10 @@ function CotizEditor({ cot: init, onBack }) {
             ))}
           </div>
 
-          {/* Totales */}
+          {/* Totales — mismo orden que el CFDI: subtotal, IVA, retenciones, total */}
           <div className="cq-totals">
             <div className="cq-total-row"><span>Subtotal</span><span className="mono">{fmt(subtotal)}</span></div>
             <div className="cq-total-row"><span>IVA 16%</span><span className="mono">{fmt(iva)}</span></div>
-            <div className="cq-total-row cq-total-big"><span>TOTAL</span><span className="mono">{fmt(total)}</span></div>
             <label style={{display:'flex',alignItems:'center',gap:7,padding:'6px 0 2px',fontSize:'0.78rem',
               color:'var(--text-2)',cursor:locked?'default':'pointer',userSelect:'none'}}>
               <input type="checkbox" checked={retiene} disabled={locked}
@@ -1038,17 +1037,26 @@ function CotizEditor({ cot: init, onBack }) {
                     <input type="checkbox" checked={conIsr} disabled={locked}
                       onChange={e=>setF('retieneIsr', e.target.checked)}
                       style={{accentColor:'var(--magenta)'}}/>
-                    Ret. ISR 1.25% (RESICO)
+                    I.S.R. retenido 1.25% (RESICO)
                   </label>
                   <span className="mono">{conIsr ? '− ' + fmt(retIsr) : 'no aplica'}</span>
                 </div>
-                <div className="cq-total-row" style={{color:'var(--magenta)'}}>
-                  <span>Ret. IVA 10.6667% (⅔)</span><span className="mono">− {fmt(retIva)}</span>
-                </div>
-                <div className="cq-total-row" style={{fontWeight:700,color:'var(--green)'}}>
-                  <span>Neto a depositar</span><span className="mono">{fmt(neto)}</span>
+                <div className="cq-total-row" style={{color:conIvaRet?'var(--magenta)':'var(--text-3)'}}>
+                  <label style={{display:'flex',alignItems:'center',gap:6,cursor:locked?'default':'pointer',userSelect:'none'}}>
+                    <input type="checkbox" checked={conIvaRet} disabled={locked}
+                      onChange={e=>setF('retieneIva', e.target.checked)}
+                      style={{accentColor:'var(--magenta)'}}/>
+                    IVA retenido 10.6667% (solo servicios)
+                  </label>
+                  <span className="mono">{conIvaRet ? '− ' + fmt(retIva) : 'no aplica'}</span>
                 </div>
               </>
+            )}
+            <div className="cq-total-row cq-total-big"><span>TOTAL</span><span className="mono">{fmt(total)}</span></div>
+            {retiene && (retIsr > 0 || retIva > 0) && (
+              <div style={{fontSize:'0.72rem',color:'var(--green)',fontWeight:600,textAlign:'right'}}>
+                Total con retenciones descontadas — es lo que deposita el cliente, igual que en tu factura
+              </div>
             )}
           </div>
 
@@ -1126,9 +1134,9 @@ function CotizEditor({ cot: init, onBack }) {
 
       {/* Documento imprimible oculto */}
       <CotizPrintDoc cot={cot} partidas={partidas} subtotal={subtotal} iva={iva} total={total}
-        retIsr={retIsr} retIva={retIva} neto={neto} logoSrc={logoB64}/>
+        retIsr={retIsr} retIva={retIva} logoSrc={logoB64}/>
       <CotizPrintDoc cot={cot} partidas={partidas} subtotal={subtotal} iva={iva} total={total}
-        retIsr={retIsr} retIva={retIva} neto={neto} logoSrc={logoB64} tipo="orden" docClass="cq-print-os"/>
+        retIsr={retIsr} retIva={retIva} logoSrc={logoB64} tipo="orden" docClass="cq-print-os"/>
     </div>
   );
 }
