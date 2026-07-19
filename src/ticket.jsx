@@ -225,6 +225,7 @@ function Ticket({ items, setItems, onCobrar, cobrarRef, ticketNumber }) {
   const [cliente,    setCliente]    = React.useState('');
   const [pausados,   setPausados]   = React.useState(() => window.storageLoad('sgi_tickets_pausados', []));
   const [showPausados, setShowPausados] = React.useState(false);
+  const [conIva,     setConIva]     = React.useState(true);
 
   const sd = (k, v) => setCotiData(d => ({ ...d, [k]: v }));
 
@@ -239,7 +240,7 @@ function Ticket({ items, setItems, onCobrar, cobrarRef, ticketNumber }) {
   }, 0));
   const globalDiscAmount = window.round2(subtotal * globalDiscount / 100);
   const subAfterDisc = window.round2(subtotal - globalDiscAmount);
-  const iva   = window.round2(subAfterDisc * 0.16);
+  const iva   = conIva ? window.round2(subAfterDisc * 0.16) : 0;
   const total = window.round2(subAfterDisc + iva);
 
   // F12 desde App dispara el cobro con los totales vigentes del ticket
@@ -253,6 +254,7 @@ function Ticket({ items, setItems, onCobrar, cobrarRef, ticketNumber }) {
     if (items.length === 0) {
       if (globalDiscount !== 0) setGlobalDiscount(0);
       if (cliente) setCliente('');
+      if (!conIva) setConIva(true);
     }
   }, [items.length]);
 
@@ -446,7 +448,19 @@ function Ticket({ items, setItems, onCobrar, cobrarRef, ticketNumber }) {
             <span className="sr-v mono">-{window.fmt(globalDiscAmount)}</span>
           </div>
         )}
-        <div className="summary-row"><span className="sr-l">IVA 16%</span><span className="sr-v mono">{window.fmt(iva)}</span></div>
+        <div className="summary-row">
+          <span className="sr-l" onClick={() => setConIva(v => !v)}
+            title={conIva ? 'Clic para vender SIN IVA' : 'Clic para volver a cobrar IVA'}
+            style={{cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6, userSelect:'none'}}>
+            <span style={{width:26, height:14, borderRadius:7, position:'relative', transition:'background 0.15s',
+              background: conIva ? 'var(--green)' : 'var(--text-3)'}}>
+              <span style={{position:'absolute', top:2, left: conIva ? 14 : 2, width:10, height:10,
+                borderRadius:'50%', background:'white', transition:'left 0.15s'}} />
+            </span>
+            {conIva ? 'IVA 16%' : 'Sin IVA'}
+          </span>
+          <span className="sr-v mono">{window.fmt(iva)}</span>
+        </div>
         <div className="summary-row total"><span className="sr-l">TOTAL</span><span className="sr-v mono">{window.fmt(total)}</span></div>
       </div>
 
