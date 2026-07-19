@@ -646,7 +646,19 @@ function ModulePedidos() {
 
   const changeEstado = (id, estado) => {
     const p = pedidos.find(x => x.id === id);
-    if (p) refresh(window.savePedido({ ...p, estado }));
+    if (!p) return;
+    if (estado === 'entregado') {
+      const fin = _fin(p);
+      if (fin.saldo > 0.01) {
+        const ok = window.confirm(
+          `⚠️ Este pedido tiene un SALDO PENDIENTE de ${window.fmt(fin.saldo)}.\n\n` +
+          `Total: ${window.fmt(fin.total)} · Abonado: ${window.fmt(fin.abonado)}\n\n` +
+          `¿Entregar de todas formas sin cobrar el saldo?`
+        );
+        if (!ok) { setAbonosFor(p); return; }
+      }
+    }
+    refresh(window.savePedido({ ...p, estado }));
   };
 
   const hoy = new Date(); hoy.setHours(0,0,0,0);

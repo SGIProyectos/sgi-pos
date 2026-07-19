@@ -60,12 +60,20 @@ function _PedidosAlertModal({ pedidos, onClose, onGoToPedidos }) {
 }
 
 // ---- Modal: registrar pedido tras cobro ----
-function _CrearPedidoModal({ ticketNum, modulo, items, total, onSave, onSkip }) {
+function _CrearPedidoModal({ ticketNum, modulo, items, total, metodo, onSave, onSkip }) {
   const hoy = window.localISO();
   const [form, setForm] = React.useState({
     cliente: '', fechaEntrega: '', tiempoElaboracion: '3', notas: '',
+    totalTrabajo: String(window.round2(total)),
   });
   const sf = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  // Lo cobrado en caja se registra como primer pago del pedido. Si el trabajo
+  // vale más que lo cobrado (se cobró solo un anticipo), queda saldo pendiente.
+  const cobrado      = window.round2(total);
+  const totalTrabajo = Math.max(window.round2(parseFloat(form.totalTrabajo) || 0), cobrado);
+  const saldo        = window.round2(totalTrabajo - cobrado);
+  const liquidado    = saldo < 0.01;
 
   const save = () => {
     const pedido = {
@@ -74,10 +82,17 @@ function _CrearPedidoModal({ ticketNum, modulo, items, total, onSave, onSkip }) 
       modulo,
       items,
       total,
-      totalCotizado:     total,
+      totalCotizado:     totalTrabajo,
       anticipoPct:       50,
-      abonos:            [],
-      estadoPago:        'sin_anticipo',
+      abonos:            [{
+        id:     window.uid(),
+        fecha:  hoy,
+        monto:  cobrado,
+        metodo: metodo || 'efectivo',
+        tipo:   liquidado ? 'liquidacion' : 'anticipo',
+        nota:   'Cobro en caja · ' + ticketNum,
+      }],
+      estadoPago:        liquidado ? 'liquidado' : 'con_anticipo',
       fecha:             hoy,
       estado:            'pendiente',
       cliente:           form.cliente,
@@ -114,6 +129,17 @@ function _CrearPedidoModal({ ticketNum, modulo, items, total, onSave, onSkip }) 
               <label>Días de elaboración</label>
               <input type="number" min="1" value={form.tiempoElaboracion}
                 onChange={e => sf('tiempoElaboracion', e.target.value)} />
+            </div>
+            <div className="field" style={{gridColumn:'1/-1'}}>
+              <label>Precio total del trabajo</label>
+              <input type="number" min={cobrado} step="0.01" value={form.totalTrabajo}
+                onChange={e => sf('totalTrabajo', e.target.value)} />
+              <div style={{fontSize:'0.78rem', marginTop:4,
+                color: liquidado ? 'var(--success, #16a34a)' : 'var(--warn, #d97706)'}}>
+                {liquidado
+                  ? `Cobrado en caja ${window.fmt(cobrado)} — pedido pagado por completo`
+                  : `Cobrado en caja ${window.fmt(cobrado)} (anticipo) · saldo pendiente ${window.fmt(saldo)}`}
+              </div>
             </div>
             <div className="field" style={{gridColumn:'1/-1'}}>
               <label>Notas / especificaciones</label>
@@ -239,7 +265,7 @@ function App() {
     showToast(`Cobro completado · ${savedTicket}`, 'success', 2200);
 
     // Mostrar formulario para registrar como pedido
-    setCrearPedido({ ticketNum: savedTicket, modulo: savedModule, items: savedItems, total: paymentData.total });
+    setCrearPedido({ ticketNum: savedTicket, modulo: savedModule, items: savedItems, total: paymentData.total, metodo: data.method });
   };
 
   const handleSavePedido = (pedido) => {
@@ -349,6 +375,7 @@ function App() {
           modulo={crearPedido.modulo}
           items={crearPedido.items}
           total={crearPedido.total}
+          metodo={crearPedido.metodo}
           onSave={handleSavePedido}
           onSkip={() => setCrearPedido(null)}
         />
