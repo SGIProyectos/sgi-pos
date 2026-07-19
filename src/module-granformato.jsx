@@ -1,28 +1,41 @@
 // ========== GRAN FORMATO MODULE ==========
 
 // La pieza puede ir normal (el ancho cruza el rollo) o girada (el alto cruza
-// el rollo). Para cada rollo gana la orientación con menos tiras y, en empate,
-// la que consume menos material.
-function _planRollo(ancho, alto, r) {
-  const tN = Math.ceil(ancho / r), tG = Math.ceil(alto / r);
-  const mN = tN * r * alto,        mG = tG * r * ancho;
-  const girado = tG < tN || (tG === tN && mG < mN);
+// el rollo). Si la pieza cabe en el ancho del rollo y hay varias, se acomodan
+// lado a lado (porFila) y se cobran las filas de rollo que realmente se usan.
+// Si la pieza es más ancha que el rollo, se parte en tiras. m2 es el TOTAL
+// para toda la cantidad.
+function _planRollo(ancho, alto, r, qty) {
+  qty = Math.max(1, qty || 1);
+  const orient = (w, h) => {           // w es el lado que cruza el rollo
+    if (w <= r) {
+      const porFila = Math.max(1, Math.floor(r / w));
+      const filas   = Math.ceil(qty / porFila);
+      return { tiras: 1, porFila, m2: r * filas * h };
+    }
+    const tiras = Math.ceil(w / r);
+    return { tiras, porFila: 1, m2: tiras * r * h * qty };
+  };
+  const N = orient(ancho, alto), G = orient(alto, ancho);
+  const girado = G.tiras < N.tiras || (G.tiras === N.tiras && G.m2 < N.m2);
+  const o = girado ? G : N;
   return {
     rollo: r,
     girado,
-    tiras: girado ? tG : tN,
-    m2: Math.round((girado ? mG : mN) * 100) / 100,
+    tiras: o.tiras,
+    porFila: Math.min(o.porFila, qty),
+    m2: Math.round(o.m2 * 100) / 100,
   };
 }
 
 // Rollo recomendado: menos tiras; en empate, menos m² consumidos; el recorrido
 // va de rollo chico a grande, así que en empate total queda el más pequeño.
-function _bestPlan(ancho, alto, rollos) {
+function _bestPlan(ancho, alto, rollos, qty) {
   if (!rollos || !rollos.length) return null;
   const sorted = [...rollos].map(Number).filter(r => r > 0).sort((a, b) => a - b);
   let best = null;
   for (const r of sorted) {
-    const p = _planRollo(ancho, alto, r);
+    const p = _planRollo(ancho, alto, r, qty);
     if (!best || p.tiras < best.tiras || (p.tiras === best.tiras && p.m2 < best.m2)) best = p;
   }
   return best;
@@ -39,8 +52,8 @@ function ModuleGranFormato({ addToTicket }) {
   const ancho = Math.max(0.01, parseFloat(anchoStr) || 0.01);
   const alto  = Math.max(0.01, parseFloat(altoStr)  || 0.01);
 
-  // Al cambiar material o medidas, volver a la recomendación automática
-  React.useEffect(() => { setRolloOverride(null); }, [material?.id, ancho, alto]);
+  // Al cambiar material, medidas o cantidad, volver a la recomendación automática
+  React.useEffect(() => { setRolloOverride(null); }, [material?.id, ancho, alto, qty]);
 
   // Guard: catálogo vaciado desde Config
   if (!material) return (
@@ -54,21 +67,22 @@ function ModuleGranFormato({ addToTicket }) {
     return isNaN(v) || v <= 0 ? '0.10' : String(Math.max(0.01, v));
   };
 
-  const recPlan    = _bestPlan(ancho, alto, material.rollos);
+  const recPlan    = _bestPlan(ancho, alto, material.rollos, qty);
   const recRollo   = recPlan ? recPlan.rollo : null;
-  const activePlan = rolloOverride != null ? _planRollo(ancho, alto, rolloOverride) : recPlan;
+  const activePlan = rolloOverride != null ? _planRollo(ancho, alto, rolloOverride, qty) : recPlan;
   const activeRollo = activePlan ? activePlan.rollo : null;
 
-  const tiras  = activePlan ? activePlan.tiras : 1;
-  const girado = activePlan ? activePlan.girado : false;
+  const tiras   = activePlan ? activePlan.tiras : 1;
+  const girado  = activePlan ? activePlan.girado : false;
+  const porFila = activePlan ? activePlan.porFila : 1;
 
-  const m2Work  = Math.round(ancho * alto * 100) / 100;
-  const m2Real  = activePlan ? activePlan.m2 : m2Work;
-  const m2Desp  = Math.round((m2Real - m2Work) * 100) / 100;
-  const pctDesp = m2Real > 0 ? Math.round((m2Desp / m2Real) * 100) : 0;
+  const m2Work  = Math.round(ancho * alto * 100) / 100;          // por pieza
+  const m2Total = activePlan ? activePlan.m2 : Math.round(m2Work * qty * 100) / 100;
+  const m2Desp  = Math.max(0, Math.round((m2Total - m2Work * qty) * 100) / 100);
+  const pctDesp = m2Total > 0 ? Math.round((m2Desp / m2Total) * 100) : 0;
 
-  const baseUnit = m2Real * material.price + finish.add;
-  const total    = baseUnit * qty;
+  const total    = window.round2(m2Total * material.price + finish.add * qty);
+  const baseUnit = window.round2(total / qty);
 
   const maxA     = Math.max(ancho, alto, 0.1);
   const previewW = (ancho / maxA) * 240;
@@ -188,7 +202,7 @@ function ModuleGranFormato({ addToTicket }) {
                 </div>
                 <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
                   {rollosSorted.map(r => {
-                    const t      = _planRollo(ancho, alto, r).tiras;
+                    const t      = _planRollo(ancho, alto, r, qty).tiras;
                     const isRec  = r === recRollo;
                     const isAct  = r === activeRollo;
                     return (
@@ -236,7 +250,7 @@ function ModuleGranFormato({ addToTicket }) {
             </div>
             <div className="preview-detail">
               <span className="pd-l">Área cobrada</span>
-              <span className="pd-v mono">{(m2Real * qty).toFixed(2)} m²</span>
+              <span className="pd-v mono">{m2Total.toFixed(2)} m²</span>
             </div>
 
             {activeRollo && (
@@ -257,15 +271,24 @@ function ModuleGranFormato({ addToTicket }) {
                     La pieza se imprime girada: el alto ({alto.toFixed(2)}m) cruza el rollo para aprovechar mejor el material.
                   </div>
                 )}
+                {porFila > 1 && (
+                  <div style={{
+                    margin:'4px 12px 0', padding:'5px 9px',
+                    background:'rgba(22,163,74,0.08)', borderRadius:6,
+                    fontSize:'0.73rem', color:'var(--green)', lineHeight:1.4
+                  }}>
+                    Se acomodan {porFila} piezas lado a lado en el ancho del rollo — se cobra solo el material usado.
+                  </div>
+                )}
                 <div className="preview-detail">
                   <span className="pd-l">Consumo real</span>
-                  <span className="pd-v mono">{(m2Real * qty).toFixed(2)} m²</span>
+                  <span className="pd-v mono">{m2Total.toFixed(2)} m²</span>
                 </div>
                 {m2Desp > 0 && (
                   <div className="preview-detail" style={{color:'var(--text-3)'}}>
                     <span className="pd-l">Desperdicio</span>
                     <span className="pd-v mono">
-                      {(m2Desp * qty).toFixed(2)} m² ({pctDesp}%)
+                      {m2Desp.toFixed(2)} m² ({pctDesp}%)
                     </span>
                   </div>
                 )}
@@ -310,8 +333,8 @@ function ModuleGranFormato({ addToTicket }) {
                 qty,
                 unitPrice: window.round2(baseUnit),
                 meta: [
-                  `${(m2Real * qty).toFixed(2)} m² (rollo ${activeRollo ?? ancho}m${girado ? ', girada' : ''})`,
-                  m2Desp > 0 ? `trabajo ${m2Work.toFixed(2)} m² · desp. ${(m2Desp * qty).toFixed(2)} m²` : null,
+                  `${m2Total.toFixed(2)} m² (rollo ${activeRollo ?? ancho}m${girado ? ', girada' : ''}${porFila > 1 ? `, ${porFila}/fila` : ''})`,
+                  m2Desp > 0 ? `trabajo ${(m2Work * qty).toFixed(2)} m² · desp. ${m2Desp.toFixed(2)} m²` : null,
                   finish.name,
                 ].filter(Boolean),
                 module: 'granformato',
