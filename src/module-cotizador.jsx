@@ -230,8 +230,10 @@ function _matchCat(desc, catalog) {
 }
 
 // ─── Documento imprimible ─────────────────────────────────────────────────────
-function CotizPrintDoc({ cot, partidas, subtotal, iva, total, logoSrc }) {
+function CotizPrintDoc({ cot, partidas, subtotal, iva, total, retIsr, retIva, neto, logoSrc, tipo, docClass }) {
   const logoUrl = logoSrc || (window.location.origin + '/logosgi.jpg');
+  const esOrden = tipo === 'orden';
+  const hayRet  = (retIsr || 0) > 0 || (retIva || 0) > 0;
 
   const fmtFecha = (iso) => {
     if (!iso) return '';
@@ -294,7 +296,7 @@ function CotizPrintDoc({ cot, partidas, subtotal, iva, total, logoSrc }) {
   };
 
   return (
-    <div className="cq-print-doc" style={{display:'none'}}>
+    <div className={docClass || 'cq-print-doc'} style={{display:'none'}}>
       <div style={S.page}>
 
         {/* ── ENCABEZADO MEMBRETE ── */}
@@ -310,8 +312,8 @@ function CotizPrintDoc({ cot, partidas, subtotal, iva, total, logoSrc }) {
             </div>
           </div>
           <div style={S.folioBox}>
-            <div style={S.folio}>{cot.folio}</div>
-            <div style={S.folLbl}>Cotización</div>
+            <div style={S.folio}>{esOrden ? 'OS-' + cot.folio : cot.folio}</div>
+            <div style={S.folLbl}>{esOrden ? 'Orden de Servicio' : 'Cotización'}</div>
             <div style={S.folFec}>Fecha: {fmtFecha(cot.fecha)}</div>
             {cot.fechaEntrega && <div style={{...S.folFec,color:'#E85D04',fontWeight:600}}>Entrega: {fmtFecha(cot.fechaEntrega)}</div>}
           </div>
@@ -342,9 +344,15 @@ function CotizPrintDoc({ cot, partidas, subtotal, iva, total, logoSrc }) {
         {/* ── SALUDO ── */}
         <div style={S.saludo}>
           {cot.contacto ? `Estimado(a) ${cot.contacto}:` : 'A quien corresponda:'}<br/>
-          Por medio de la presente, nos es grato poner a su disposición la siguiente cotización
-          de productos y servicios, esperando poder cubrir satisfactoriamente con sus requerimientos.
-          A continuación le presentamos el detalle:
+          {esOrden ? (
+            <>Por medio de la presente se formaliza la <strong>orden de servicio</strong> correspondiente
+            a los trabajos de impresión y servicios descritos a continuación, conforme a lo acordado
+            con el cliente. Este documento sirve como respaldo de la operación:</>
+          ) : (
+            <>Por medio de la presente, nos es grato poner a su disposición la siguiente cotización
+            de productos y servicios, esperando poder cubrir satisfactoriamente con sus requerimientos.
+            A continuación le presentamos el detalle:</>
+          )}
         </div>
 
         {/* ── TABLA DE PARTIDAS ── */}
@@ -382,6 +390,15 @@ function CotizPrintDoc({ cot, partidas, subtotal, iva, total, logoSrc }) {
               <strong style={{fontFamily:'Archivo Black,Arial,sans-serif',fontSize:13}}>TOTAL</strong>
               <strong style={{fontFamily:'monospace',fontSize:15,color:'#E85D04'}}>{fmt(total)}</strong>
             </div>
+            {hayRet && (
+              <div style={{marginTop:8,paddingTop:6,borderTop:'1px dashed #ccc'}}>
+                <div style={S.totRow}><span>Ret. ISR 1.25% (RESICO)</span><span style={{fontFamily:'monospace'}}>− {fmt(retIsr)}</span></div>
+                <div style={S.totRow}><span>Ret. IVA 10.6667% (⅔ del IVA)</span><span style={{fontFamily:'monospace'}}>− {fmt(retIva)}</span></div>
+                <div style={{...S.totRow,fontWeight:700,color:'#16803c'}}>
+                  <span>Neto a depositar</span><span style={{fontFamily:'monospace'}}>{fmt(neto)}</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -412,9 +429,15 @@ function CotizPrintDoc({ cot, partidas, subtotal, iva, total, logoSrc }) {
 
         {/* ── PIE DE PÁGINA ── */}
         <div style={S.pie}>
-          Precios expresados en moneda nacional (MXN) más IVA 16% &nbsp;·&nbsp;
-          Cotización válida por 30 días naturales a partir de su fecha de emisión &nbsp;·&nbsp;
-          Hidalgo del Parral, Chihuahua
+          {esOrden ? (
+            <>Precios expresados en moneda nacional (MXN), IVA 16% incluido en el desglose &nbsp;·&nbsp;
+            Documento de respaldo de la operación (orden de servicio) &nbsp;·&nbsp;
+            Hidalgo del Parral, Chihuahua</>
+          ) : (
+            <>Precios expresados en moneda nacional (MXN) más IVA 16% &nbsp;·&nbsp;
+            Cotización válida por 30 días naturales a partir de su fecha de emisión &nbsp;·&nbsp;
+            Hidalgo del Parral, Chihuahua</>
+          )}
         </div>
 
       </div>
@@ -665,6 +688,11 @@ function CotizEditor({ cot: init, onBack }) {
   const subtotal  = round2(partidas.reduce((s,p) => s+(p.subtotal||0), 0));
   const iva       = round2(subtotal * 0.16);
   const total     = round2(subtotal + iva);
+  // Retenciones cuando factura a persona moral (RESICO persona física, servicios)
+  const retiene   = !!cot.retiene;
+  const retIsr    = retiene ? round2(subtotal * 0.0125) : 0;
+  const retIva    = retiene ? round2(iva * 2 / 3) : 0;
+  const neto      = round2(total - retIsr - retIva);
 
   React.useEffect(() => { if (sections.length && !secTab) setSecTab(sections[0].id); }, [sections]);
 
@@ -849,7 +877,10 @@ function CotizEditor({ cot: init, onBack }) {
           </select>
         )}
         <button className="cq-btn-sec" onClick={()=>window.printSgiDoc('.cq-print-doc')}>
-          <window.IconPrint size={14}/> Imprimir
+          <window.IconPrint size={14}/> Cotización
+        </button>
+        <button className="cq-btn-sec" onClick={()=>window.printSgiDoc('.cq-print-os')} title="Imprimir orden de servicio (respaldo para empresas)">
+          <window.IconPrint size={14}/> Orden de servicio
         </button>
         {cot.estado !== 'aprobada' && (
           <button className="cq-btn-orange" onClick={()=>partidas.length&&setShowApprove(true)} disabled={!partidas.length}>
@@ -992,6 +1023,26 @@ function CotizEditor({ cot: init, onBack }) {
             <div className="cq-total-row"><span>Subtotal</span><span className="mono">{fmt(subtotal)}</span></div>
             <div className="cq-total-row"><span>IVA 16%</span><span className="mono">{fmt(iva)}</span></div>
             <div className="cq-total-row cq-total-big"><span>TOTAL</span><span className="mono">{fmt(total)}</span></div>
+            <label style={{display:'flex',alignItems:'center',gap:7,padding:'6px 0 2px',fontSize:'0.78rem',
+              color:'var(--text-2)',cursor:locked?'default':'pointer',userSelect:'none'}}>
+              <input type="checkbox" checked={retiene} disabled={locked}
+                onChange={e=>setF('retiene', e.target.checked)}
+                style={{accentColor:'var(--orange)'}}/>
+              El cliente retiene impuestos (empresas / persona moral)
+            </label>
+            {retiene && (
+              <>
+                <div className="cq-total-row" style={{color:'var(--magenta)'}}>
+                  <span>Ret. ISR 1.25% (RESICO)</span><span className="mono">− {fmt(retIsr)}</span>
+                </div>
+                <div className="cq-total-row" style={{color:'var(--magenta)'}}>
+                  <span>Ret. IVA 10.6667% (⅔)</span><span className="mono">− {fmt(retIva)}</span>
+                </div>
+                <div className="cq-total-row" style={{fontWeight:700,color:'var(--green)'}}>
+                  <span>Neto a depositar</span><span className="mono">{fmt(neto)}</span>
+                </div>
+              </>
+            )}
           </div>
 
           <div style={{padding:'0 16px 14px'}}>
@@ -1067,7 +1118,10 @@ function CotizEditor({ cot: init, onBack }) {
       )}
 
       {/* Documento imprimible oculto */}
-      <CotizPrintDoc cot={cot} partidas={partidas} subtotal={subtotal} iva={iva} total={total} logoSrc={logoB64}/>
+      <CotizPrintDoc cot={cot} partidas={partidas} subtotal={subtotal} iva={iva} total={total}
+        retIsr={retIsr} retIva={retIva} neto={neto} logoSrc={logoB64}/>
+      <CotizPrintDoc cot={cot} partidas={partidas} subtotal={subtotal} iva={iva} total={total}
+        retIsr={retIsr} retIva={retIva} neto={neto} logoSrc={logoB64} tipo="orden" docClass="cq-print-os"/>
     </div>
   );
 }
