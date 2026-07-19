@@ -683,13 +683,20 @@ function CotizEditor({ cot: init, onBack }) {
   const curSec    = sections.find(s => s.id === secTab) || sections[0];
 
   const partidas  = cot.partidas || [];
-  const subtotal  = round2(partidas.reduce((s,p) => s+(p.subtotal||0), 0));
-  const iva       = round2(subtotal * 0.16);
   // Retenciones al facturar a persona moral: ISR 1.25% siempre (Art. 113-J, RESICO).
   // IVA retenido: gobierno/CFE retiene el 100% (Art. 3 LIVA); empresas privadas ⅔ solo en servicios.
   const retiene    = !!cot.retiene;
   const conIsr     = retiene && cot.retieneIsr !== false;
   const modoIvaRet = !retiene ? '' : (cot.retIvaModo !== undefined ? cot.retIvaModo : (cot.retieneIva ? 'tercios' : ''));
+  // Repercutir ISR al precio: ÷0.9875 para que la retención la pague el cliente, no el negocio
+  const repIsr     = conIsr && !!cot.repIsr;
+  const _F         = repIsr ? 1 / 0.9875 : 1;
+  const partidasDoc= repIsr ? partidas.map(p => ({ ...p,
+                       precioUnit: round2((p.precioUnit||0) * _F),
+                       subtotal:   round2((p.subtotal||0)   * _F) })) : partidas;
+  const subtotal   = round2(partidasDoc.reduce((s,p) => s+(p.subtotal||0), 0));
+  const subBase    = repIsr ? round2(partidas.reduce((s,p) => s+(p.subtotal||0), 0)) : subtotal;
+  const iva        = round2(subtotal * 0.16);
   const retIsr     = conIsr ? round2(subtotal * 0.0125) : 0;
   const retIva     = modoIvaRet === 'total' ? iva : modoIvaRet === 'tercios' ? round2(iva * 2 / 3) : 0;
   // Igual que el CFDI: Total = Subtotal + IVA − retenciones (es lo que deposita el cliente)
@@ -798,7 +805,7 @@ function CotizEditor({ cot: init, onBack }) {
     const pedId = uid();
     const ped = {
       id: pedId, ticketNum: cot.folio, modulo: 'cotizador',
-      items: partidas.map(p=>({id:p.id,name:p.descripcion,qty:p.cantidad,unitPrice:p.precioUnit,meta:[p.unidad],module:'cotizador'})),
+      items: partidasDoc.map(p=>({id:p.id,name:p.descripcion,qty:p.cantidad,unitPrice:p.precioUnit,meta:[p.unidad],module:'cotizador'})),
       total, totalCotizado: total,
       anticipoPct:  opts?.anticipoPct  ?? 50,
       abonos: [], estadoPago: 'sin_anticipo',
@@ -1021,7 +1028,7 @@ function CotizEditor({ cot: init, onBack }) {
 
           {/* Totales — mismo orden que el CFDI: subtotal, IVA, retenciones, total */}
           <div className="cq-totals">
-            <div className="cq-total-row"><span>Subtotal</span><span className="mono">{fmt(subtotal)}</span></div>
+            <div className="cq-total-row"><span>Subtotal{repIsr ? ' (ISR repercutido)' : ''}</span><span className="mono">{fmt(subtotal)}</span></div>
             <div className="cq-total-row"><span>IVA 16%</span><span className="mono">{fmt(iva)}</span></div>
             <label style={{display:'flex',alignItems:'center',gap:7,padding:'6px 0 2px',fontSize:'0.78rem',
               color:'var(--text-2)',cursor:locked?'default':'pointer',userSelect:'none'}}>
@@ -1041,6 +1048,21 @@ function CotizEditor({ cot: init, onBack }) {
                   </label>
                   <span className="mono">{conIsr ? '− ' + fmt(retIsr) : 'no aplica'}</span>
                 </div>
+                {conIsr && (
+                  <label style={{display:'flex',alignItems:'center',gap:6,padding:'2px 0 2px 20px',
+                    fontSize:'0.74rem',color:repIsr?'var(--green)':'var(--text-3)',
+                    cursor:locked?'default':'pointer',userSelect:'none'}}>
+                    <input type="checkbox" checked={repIsr} disabled={locked}
+                      onChange={e=>setF('repIsr', e.target.checked)}
+                      style={{accentColor:'var(--green)'}}/>
+                    Repercutir ISR al precio (÷0.9875 — lo paga el cliente)
+                  </label>
+                )}
+                {repIsr && (
+                  <div style={{fontSize:'0.72rem',color:'var(--text-2)',padding:'0 0 2px 20px'}}>
+                    Precios del documento ajustados: subtotal {fmt(subtotal)} · tu precio original {fmt(subBase)} → recibes {fmt(round2(subtotal - retIsr))} de subtotal efectivo
+                  </div>
+                )}
                 <div className="cq-total-row" style={{color:modoIvaRet?'var(--magenta)':'var(--text-3)'}}>
                   <span style={{display:'flex',alignItems:'center',gap:6}}>
                     I.V.A. retenido
@@ -1138,9 +1160,9 @@ function CotizEditor({ cot: init, onBack }) {
       )}
 
       {/* Documento imprimible oculto */}
-      <CotizPrintDoc cot={cot} partidas={partidas} subtotal={subtotal} iva={iva} total={total}
+      <CotizPrintDoc cot={cot} partidas={partidasDoc} subtotal={subtotal} iva={iva} total={total}
         retIsr={retIsr} retIva={retIva} logoSrc={logoB64}/>
-      <CotizPrintDoc cot={cot} partidas={partidas} subtotal={subtotal} iva={iva} total={total}
+      <CotizPrintDoc cot={cot} partidas={partidasDoc} subtotal={subtotal} iva={iva} total={total}
         retIsr={retIsr} retIva={retIva} logoSrc={logoB64} tipo="orden" docClass="cq-print-os"/>
     </div>
   );
