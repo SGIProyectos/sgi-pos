@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: sgi-pos
+    runtime: static
+    buildCommand: ""
+    staticPublishPath: .
