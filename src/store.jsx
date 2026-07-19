@@ -16,7 +16,11 @@ function storageLoad(key, fallback) {
   catch { return fallback; }
 }
 function storageSave(key, data) {
-  try { localStorage.setItem(key, JSON.stringify(data)); return true; }
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+    if (window.SGISync) window.SGISync.queuePush(key);
+    return true;
+  }
   catch (e) { console.error(`storageSave falló para "${key}":`, e); return false; }
 }
 
@@ -421,6 +425,7 @@ function nextCotiNum() {
   const key  = `sgi_coti_num_${year}`;
   const n    = (parseInt(localStorage.getItem(key) || '0', 10) || 0) + 1;
   localStorage.setItem(key, String(n));
+  if (window.SGISync) window.SGISync.queuePush(key);
   return `COT-${year}-${String(n).padStart(3, '0')}`;
 }
 
@@ -557,6 +562,7 @@ function nextCotizNum() {
   const key = `sgi_cotiz_num_${yr}`;
   const n   = (parseInt(localStorage.getItem(key) || '0', 10) || 0) + 1;
   localStorage.setItem(key, String(n));
+  if (window.SGISync) window.SGISync.queuePush(key);
   return `COT-${yr}-${String(n).padStart(4, '0')}`;
 }
 

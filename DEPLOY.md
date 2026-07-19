@@ -1,8 +1,10 @@
 # Subir SGI POS a Render
 
-App 100% estática (sin backend). Los datos (ventas, precios, config) viven en el
-navegador (localStorage): cada dispositivo tiene sus propios datos y NO se
-comparten entre computadoras ni con la versión local.
+App estática + Supabase para sincronizar. Los datos (ventas, precios, config)
+viven primero en el navegador (localStorage) y, con sesión iniciada, se suben a
+la nube y se comparten entre dispositivos. Sin internet la app sigue funcionando
+y sube los cambios cuando vuelve la conexión. El botón "Trabajar sin conexión"
+usa solo los datos de ese equipo.
 
 ## Pasos (una sola vez)
 
@@ -32,6 +34,11 @@ Render redespliega automáticamente en ~1 minuto.
 
 ## Avisos
 
-- La URL pública la puede abrir cualquiera que la tenga (no hay login).
-  `robots.txt` evita que aparezca en Google, pero no la compartas.
+- Al abrir la app pide correo y contraseña (usuario creado en Supabase →
+  Authentication → Users). Sin sesión solo se puede entrar en modo
+  "sin conexión", que no toca los datos de la nube.
+- La clave publicable de Supabase va en `src/sync.js`; es segura de publicar
+  (los datos están protegidos por login + RLS). Deja los registros públicos
+  (signups) DESACTIVADOS en Supabase → Authentication → Sign In / Up.
+- `robots.txt` evita que la URL aparezca en Google, pero no la compartas.
 - La clave de API (cotizador IA) se guarda solo en el navegador, no en el repo.

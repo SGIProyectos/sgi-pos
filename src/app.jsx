@@ -364,4 +364,130 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+// ===== NUBE (Supabase): login + arranque =====
+function _LoginNube({ onListo }) {
+  const [email, setEmail] = React.useState('');
+  const [pass, setPass]   = React.useState('');
+  const [msg, setMsg]     = React.useState('');
+  const [busy, setBusy]   = React.useState(false);
+
+  const entrar = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true); setMsg('Conectando…');
+    try {
+      await window.SGISync.login(email.trim(), pass);
+      setMsg('Sincronizando datos…');
+      await window.SGISync.sync();
+      onListo();
+    } catch (err) {
+      setMsg(err && err.message === 'Invalid login credentials'
+        ? 'Correo o contraseña incorrectos'
+        : 'Error: ' + ((err && err.message) || 'sin conexión'));
+      setBusy(false);
+    }
+  };
+
+  const sinNube = () => {
+    try { sessionStorage.setItem('sgi_offline', '1'); } catch {}
+    onListo();
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg, #f1f5f9)' }}>
+      <form onSubmit={entrar} style={{ background: '#fff', borderRadius: 16, padding: '36px 32px', width: 340, boxShadow: '0 8px 30px rgba(0,0,0,.12)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <img src="logosgi.jpg" alt="SGI" style={{ width: 84, alignSelf: 'center', borderRadius: 12 }} />
+        <h2 style={{ margin: '4px 0 0', textAlign: 'center', fontSize: 20 }}>SGI Punto de Venta</h2>
+        <p style={{ margin: 0, textAlign: 'center', fontSize: 13, color: '#64748b' }}>Inicia sesión para sincronizar tus datos</p>
+        <input type="email" required autoFocus placeholder="Correo" value={email} onChange={e => setEmail(e.target.value)}
+          style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 15 }} />
+        <input type="password" required placeholder="Contraseña" value={pass} onChange={e => setPass(e.target.value)}
+          style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 15 }} />
+        <button type="submit" disabled={busy}
+          style={{ padding: '11px 0', border: 'none', borderRadius: 8, background: '#2563eb', color: '#fff', fontSize: 15, fontWeight: 600, cursor: busy ? 'wait' : 'pointer', opacity: busy ? .7 : 1 }}>
+          {busy ? 'Entrando…' : 'Entrar'}
+        </button>
+        {msg && <div style={{ fontSize: 13, textAlign: 'center', color: msg.indexOf('…') >= 0 ? '#64748b' : '#dc2626' }}>{msg}</div>}
+        <button type="button" onClick={sinNube}
+          style={{ marginTop: 4, background: 'none', border: 'none', color: '#64748b', fontSize: 13, textDecoration: 'underline', cursor: 'pointer' }}>
+          Trabajar sin conexión (solo este equipo)
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function _NubeBadge() {
+  const [estado, setEstado] = React.useState(window.SGISync ? window.SGISync.estado : 'off');
+  React.useEffect(() => {
+    if (!window.SGISync) return;
+    return window.SGISync.onEstado(setEstado);
+  }, []);
+  if (!window.SGISync || !window.SGISync.sesion) return null;
+  const info = {
+    ok:    { txt: 'Nube al día', bg: '#dcfce7', fg: '#166534' },
+    sync:  { txt: 'Sincronizando…', bg: '#dbeafe', fg: '#1d4ed8' },
+    error: { txt: 'Sin conexión — se reintentará', bg: '#fee2e2', fg: '#b91c1c' },
+    off:   { txt: 'Nube', bg: '#e2e8f0', fg: '#475569' },
+  }[estado] || { txt: estado, bg: '#e2e8f0', fg: '#475569' };
+  const salir = async () => {
+    if (!confirm('¿Cerrar sesión de la nube? Los datos locales se conservan.')) return;
+    await window.SGISync.logout();
+    try { sessionStorage.removeItem('sgi_offline'); sessionStorage.removeItem('sgi_synced_boot'); } catch {}
+    location.reload();
+  };
+  return (
+    <div style={{ position: 'fixed', right: 12, bottom: 12, zIndex: 9000, display: 'flex', alignItems: 'center', gap: 6, background: info.bg, color: info.fg, borderRadius: 999, padding: '5px 12px', fontSize: 12, fontWeight: 600, boxShadow: '0 2px 8px rgba(0,0,0,.15)' }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: info.fg, display: 'inline-block' }} />
+      {info.txt}
+      <button onClick={salir} title="Cerrar sesión de la nube"
+        style={{ marginLeft: 4, background: 'none', border: 'none', color: info.fg, cursor: 'pointer', fontSize: 12, textDecoration: 'underline', padding: 0 }}>
+        salir
+      </button>
+    </div>
+  );
+}
+
+function Root() {
+  // fase: cargando | login | app
+  const [fase, setFase] = React.useState('cargando');
+
+  React.useEffect(() => {
+    (async () => {
+      let offline = false;
+      try { offline = sessionStorage.getItem('sgi_offline') === '1'; } catch {}
+      if (!window.SGISync || offline) { setFase('app'); return; }
+      try {
+        const ses = await window.SGISync.init();
+        if (!ses) { setFase('login'); return; }
+        let yaSync = false;
+        try { yaSync = sessionStorage.getItem('sgi_synced_boot') === '1'; } catch {}
+        if (!yaSync) {
+          const r = await window.SGISync.sync();
+          try { sessionStorage.setItem('sgi_synced_boot', '1'); } catch {}
+          if (r && r.cambios > 0) { location.reload(); return; }
+        }
+      } catch (e) { console.error('SGISync arranque:', e); }
+      setFase('app');
+    })();
+  }, []);
+
+  if (fase === 'cargando') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: 15 }}>
+        Cargando…
+      </div>
+    );
+  }
+  if (fase === 'login') {
+    return <_LoginNube onListo={() => { try { sessionStorage.setItem('sgi_synced_boot', '1'); } catch {} location.reload(); }} />;
+  }
+  return (
+    <>
+      <App />
+      <_NubeBadge />
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
