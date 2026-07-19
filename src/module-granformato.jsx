@@ -1,13 +1,31 @@
 // ========== GRAN FORMATO MODULE ==========
 
-// Devuelve el rollo recomendado: el que logra menos tiras, y dentro
-// del mismo número de tiras, el más pequeño (menos desperdicio).
-function _bestRollo(ancho, rollos) {
+// La pieza puede ir normal (el ancho cruza el rollo) o girada (el alto cruza
+// el rollo). Para cada rollo gana la orientación con menos tiras y, en empate,
+// la que consume menos material.
+function _planRollo(ancho, alto, r) {
+  const tN = Math.ceil(ancho / r), tG = Math.ceil(alto / r);
+  const mN = tN * r * alto,        mG = tG * r * ancho;
+  const girado = tG < tN || (tG === tN && mG < mN);
+  return {
+    rollo: r,
+    girado,
+    tiras: girado ? tG : tN,
+    m2: Math.round((girado ? mG : mN) * 100) / 100,
+  };
+}
+
+// Rollo recomendado: menos tiras; en empate, menos m² consumidos; el recorrido
+// va de rollo chico a grande, así que en empate total queda el más pequeño.
+function _bestPlan(ancho, alto, rollos) {
   if (!rollos || !rollos.length) return null;
   const sorted = [...rollos].map(Number).filter(r => r > 0).sort((a, b) => a - b);
-  if (!sorted.length) return null;
-  const minTiras = Math.min(...sorted.map(r => Math.ceil(ancho / r)));
-  return sorted.find(r => Math.ceil(ancho / r) === minTiras);
+  let best = null;
+  for (const r of sorted) {
+    const p = _planRollo(ancho, alto, r);
+    if (!best || p.tiras < best.tiras || (p.tiras === best.tiras && p.m2 < best.m2)) best = p;
+  }
+  return best;
 }
 
 function ModuleGranFormato({ addToTicket }) {
@@ -21,8 +39,8 @@ function ModuleGranFormato({ addToTicket }) {
   const ancho = Math.max(0.01, parseFloat(anchoStr) || 0.01);
   const alto  = Math.max(0.01, parseFloat(altoStr)  || 0.01);
 
-  // Al cambiar material o ancho, volver a la recomendación automática
-  React.useEffect(() => { setRolloOverride(null); }, [material?.id, ancho]);
+  // Al cambiar material o medidas, volver a la recomendación automática
+  React.useEffect(() => { setRolloOverride(null); }, [material?.id, ancho, alto]);
 
   // Guard: catálogo vaciado desde Config
   if (!material) return (
@@ -36,14 +54,16 @@ function ModuleGranFormato({ addToTicket }) {
     return isNaN(v) || v <= 0 ? '0.10' : String(Math.max(0.01, v));
   };
 
-  const recRollo    = _bestRollo(ancho, material.rollos);
-  const activeRollo = rolloOverride ?? recRollo;
+  const recPlan    = _bestPlan(ancho, alto, material.rollos);
+  const recRollo   = recPlan ? recPlan.rollo : null;
+  const activePlan = rolloOverride != null ? _planRollo(ancho, alto, rolloOverride) : recPlan;
+  const activeRollo = activePlan ? activePlan.rollo : null;
 
-  const tiras     = activeRollo ? Math.ceil(ancho / activeRollo) : 1;
-  const anchoReal = activeRollo ? Math.round(tiras * activeRollo * 100) / 100 : ancho;
+  const tiras  = activePlan ? activePlan.tiras : 1;
+  const girado = activePlan ? activePlan.girado : false;
 
   const m2Work  = Math.round(ancho * alto * 100) / 100;
-  const m2Real  = Math.round(anchoReal * alto * 100) / 100;
+  const m2Real  = activePlan ? activePlan.m2 : m2Work;
   const m2Desp  = Math.round((m2Real - m2Work) * 100) / 100;
   const pctDesp = m2Real > 0 ? Math.round((m2Desp / m2Real) * 100) : 0;
 
@@ -168,7 +188,7 @@ function ModuleGranFormato({ addToTicket }) {
                 </div>
                 <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
                   {rollosSorted.map(r => {
-                    const t      = Math.ceil(ancho / r);
+                    const t      = _planRollo(ancho, alto, r).tiras;
                     const isRec  = r === recRollo;
                     const isAct  = r === activeRollo;
                     return (
@@ -225,8 +245,18 @@ function ModuleGranFormato({ addToTicket }) {
                   <span className="pd-l">Rollo</span>
                   <span className="pd-v mono">
                     {tiras > 1 ? `${tiras} tiras × ${activeRollo}m` : `${activeRollo}m`}
+                    {girado ? ' · girada' : ''}
                   </span>
                 </div>
+                {girado && (
+                  <div style={{
+                    margin:'4px 12px 0', padding:'5px 9px',
+                    background:'rgba(6,182,212,0.08)', borderRadius:6,
+                    fontSize:'0.73rem', color:'var(--cyan)', lineHeight:1.4
+                  }}>
+                    La pieza se imprime girada: el alto ({alto.toFixed(2)}m) cruza el rollo para aprovechar mejor el material.
+                  </div>
+                )}
                 <div className="preview-detail">
                   <span className="pd-l">Consumo real</span>
                   <span className="pd-v mono">{(m2Real * qty).toFixed(2)} m²</span>
@@ -280,7 +310,7 @@ function ModuleGranFormato({ addToTicket }) {
                 qty,
                 unitPrice: window.round2(baseUnit),
                 meta: [
-                  `${(m2Real * qty).toFixed(2)} m² (rollo ${activeRollo ?? ancho}m)`,
+                  `${(m2Real * qty).toFixed(2)} m² (rollo ${activeRollo ?? ancho}m${girado ? ', girada' : ''})`,
                   m2Desp > 0 ? `trabajo ${m2Work.toFixed(2)} m² · desp. ${(m2Desp * qty).toFixed(2)} m²` : null,
                   finish.name,
                 ].filter(Boolean),
