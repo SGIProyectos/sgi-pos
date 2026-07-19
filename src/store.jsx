@@ -223,6 +223,11 @@ const _GFF_DEFAULTS = [
 ];
 let GF_FINISH = storageLoad('sgi_gf_finish', _GFF_DEFAULTS);
 
+// Parámetros de acomodo en rollo (en metros): margen de sellado/dobladillo por
+// lado de cada pieza, y traslape de unión cuando el trabajo se parte en tiras
+const _GFP_DEFAULTS = { margen: 0.025, traslape: 0.05 };
+let GF_PARAMS = { ..._GFP_DEFAULTS, ...storageLoad('sgi_gf_params', {}) };
+
 // ===== BORDADO =====
 const _BT_DEFAULTS = [
   { id:'algodon',   name:'Algodón',      mult:1.00, activo:true },
@@ -343,6 +348,11 @@ function refreshGfFinish(raw) {
   storageSave('sgi_gf_finish', raw);
   window.GF_FINISH = raw;
 }
+function refreshGfParams(p) {
+  const clean = { ..._GFP_DEFAULTS, ...p };
+  storageSave('sgi_gf_params', clean);
+  window.GF_PARAMS = clean;
+}
 function refreshBordadoTelas(raw) {
   storageSave('sgi_bordado_telas', raw);
   window.BORDADO_TELAS_RAW = raw;
@@ -431,7 +441,7 @@ function nextCotiNum() {
 
 const _BK_ALL_KEYS = [
   'sgi_copiado_direct','sgi_print_paper','sgi_impreso_tipos','sgi_copiado_opciones',
-  'sgi_gf_materials','sgi_gf_finish','sgi_bordado_telas','sgi_bordado_precios',
+  'sgi_gf_materials','sgi_gf_finish','sgi_gf_params','sgi_bordado_telas','sgi_bordado_precios',
   'sgi_usuarios','sgi_negocio','sgi_cfdi','sgi_gastos','sgi_ventas',
   'sgi_pedidos','sgi_backup_cfg','sgi_backup_meta',
   'sgi_coti_catalog','sgi_cotizaciones','sgi_api_key',
@@ -641,6 +651,7 @@ Object.assign(window, {
   IMPRESO_TIPOS_RAW, IMPRESO_TIPOS, IMPRESO_VOL, IMPRESO_PAPELES, IMPRESO_ACABADOS, IMPRESO_URGENCIA,
   COPIADO_OPC, COPIADO_OPC_DEFAULTS: _CO_DEFAULTS,
   GF_MATERIALS_RAW, GF_MATERIALS, GF_FINISH, GF_FINISH_DEFAULTS: _GFF_DEFAULTS,
+  GF_PARAMS, GF_PARAMS_DEFAULTS: _GFP_DEFAULTS, refreshGfParams,
   BORDADO_TELAS_RAW, BORDADO_TELAS,
   BORDADO_PRECIOS, BORDADO_PRECIOS_DEFAULTS: _BP_DEFAULTS,
   USUARIOS_RAW, USUARIOS,

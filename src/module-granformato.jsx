@@ -1,24 +1,33 @@
 // ========== GRAN FORMATO MODULE ==========
 
 // La pieza puede ir normal (el ancho cruza el rollo) o girada (el alto cruza
-// el rollo). Si la pieza cabe en el ancho del rollo y hay varias, se acomodan
-// lado a lado (porFila) y se cobran las filas de rollo que realmente se usan.
-// Si la pieza es más ancha que el rollo, se parte en tiras. m2 es el TOTAL
-// para toda la cantidad.
+// el rollo). Cada pieza necesita margen de sellado/dobladillo por lado
+// (GF_PARAMS.margen): ese margen decide cuántas piezas caben lado a lado en el
+// ancho del rollo (porFila) y si la pieza siquiera cabe sin partirse. Si no
+// cabe, se parte en tiras y cada unión consume traslape (GF_PARAMS.traslape).
+// Se cobra rollo × largo usado (el alto de las filas impresas); m2 es el TOTAL
+// para toda la cantidad. Todo el pedido sale del MISMO rollo porque la textura
+// y el tono varían entre rollos.
 function _planRollo(ancho, alto, r, qty) {
   qty = Math.max(1, qty || 1);
+  const P  = window.GF_PARAMS || { margen: 0.025, traslape: 0.05 };
+  const mg = Math.max(0, Number(P.margen)   || 0);
+  const tr = Math.max(0, Number(P.traslape) || 0);
   const orient = (w, h) => {           // w es el lado que cruza el rollo
-    if (w <= r) {
-      const porFila = Math.max(1, Math.floor(r / w));
+    const wEff = w + 2 * mg;           // pieza + dobladillo por lado
+    if (wEff <= r + 1e-9) {
+      const porFila = Math.max(1, Math.floor((r + 1e-9) / wEff));
       const filas   = Math.ceil(qty / porFila);
       return { tiras: 1, porFila, m2: r * filas * h };
     }
-    const tiras = Math.ceil(w / r);
-    return { tiras, porFila: 1, m2: tiras * r * h * qty };
+    // pieza más ancha que el rollo: t tiras cubren wEff más los traslapes
+    const t = r > tr ? Math.max(2, Math.ceil((wEff - tr) / (r - tr) - 1e-9)) : Infinity;
+    return { tiras: t, porFila: 1, m2: t === Infinity ? Infinity : t * r * h * qty };
   };
   const N = orient(ancho, alto), G = orient(alto, ancho);
   const girado = G.tiras < N.tiras || (G.tiras === N.tiras && G.m2 < N.m2);
   const o = girado ? G : N;
+  if (o.m2 === Infinity) return null;
   return {
     rollo: r,
     girado,
@@ -36,7 +45,7 @@ function _bestPlan(ancho, alto, rollos, qty) {
   let best = null;
   for (const r of sorted) {
     const p = _planRollo(ancho, alto, r, qty);
-    if (!best || p.tiras < best.tiras || (p.tiras === best.tiras && p.m2 < best.m2)) best = p;
+    if (p && (!best || p.tiras < best.tiras || (p.tiras === best.tiras && p.m2 < best.m2))) best = p;
   }
   return best;
 }
@@ -202,7 +211,9 @@ function ModuleGranFormato({ addToTicket }) {
                 </div>
                 <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
                   {rollosSorted.map(r => {
-                    const t      = _planRollo(ancho, alto, r, qty).tiras;
+                    const plan   = _planRollo(ancho, alto, r, qty);
+                    if (!plan) return null;
+                    const t      = plan.tiras;
                     const isRec  = r === recRollo;
                     const isAct  = r === activeRollo;
                     return (

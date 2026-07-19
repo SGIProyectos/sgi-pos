@@ -13,7 +13,7 @@
   // respaldos y usuario activo (estado del dispositivo).
   const SYNC_KEYS = [
     'sgi_copiado_direct', 'sgi_print_paper', 'sgi_impreso_tipos', 'sgi_copiado_opciones',
-    'sgi_gf_materials', 'sgi_gf_finish', 'sgi_bordado_telas', 'sgi_bordado_precios',
+    'sgi_gf_materials', 'sgi_gf_finish', 'sgi_gf_params', 'sgi_bordado_telas', 'sgi_bordado_precios',
     'sgi_usuarios', 'sgi_negocio', 'sgi_cfdi', 'sgi_gastos', 'sgi_ventas',
     'sgi_pedidos', 'sgi_coti_catalog', 'sgi_cotizaciones', 'sgi_tickets_pausados',
   ];

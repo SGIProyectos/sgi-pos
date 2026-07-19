@@ -614,6 +614,51 @@ function CfgCopiadoOpciones({ onToast }) {
 // ========== GRAN FORMATO ==========
 const _GF_EMPTY = { name:'', desc:'', price:'', activo:true, rollos:[] };
 
+// Margen de sellado y traslape de unión (se capturan en cm, se guardan en m)
+function _GfParamsCard({ onToast }) {
+  const [margen,   setMargen]   = React.useState(() => String(Math.round((window.GF_PARAMS.margen   || 0) * 1000) / 10));
+  const [traslape, setTraslape] = React.useState(() => String(Math.round((window.GF_PARAMS.traslape || 0) * 1000) / 10));
+  const save = () => {
+    window.refreshGfParams({
+      margen:   Math.max(0, parseFloat(margen)   || 0) / 100,
+      traslape: Math.max(0, parseFloat(traslape) || 0) / 100,
+    });
+    onToast('Parámetros de acomodo en rollo guardados');
+  };
+  return (
+    <div className="cfg-section" style={{marginTop:18, maxWidth:560}}>
+      <h3 style={{fontSize:'0.95rem', marginBottom:4}}>Acomodo en rollo</h3>
+      <p style={{fontSize:'0.8rem', color:'var(--text-3)', marginBottom:12}}>
+        El margen de sellado es el espacio que necesita cada pieza por lado para
+        dobladillo/bastilla y corte — decide cuántas piezas caben lado a lado en
+        el ancho del rollo. El traslape es lo que se encima cada unión cuando una
+        lona grande se arma con varias tiras.
+      </p>
+      <div className="cfg-form-grid" style={{gridTemplateColumns:'1fr 1fr auto', alignItems:'end'}}>
+        <div className="field">
+          <label>Margen de sellado por lado</label>
+          <div className="suffix-input">
+            <input type="number" min="0" step="0.5" value={margen}
+              onChange={e => setMargen(e.target.value)} />
+            <span className="suffix">cm</span>
+          </div>
+        </div>
+        <div className="field">
+          <label>Traslape de unión entre tiras</label>
+          <div className="suffix-input">
+            <input type="number" min="0" step="0.5" value={traslape}
+              onChange={e => setTraslape(e.target.value)} />
+            <span className="suffix">cm</span>
+          </div>
+        </div>
+        <button className="cfg-btn-save" onClick={save} style={{height:38}}>
+          <window.IconCheck size={15} /> Guardar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function CfgGranFormato({ onToast }) {
   const [items, setItems] = React.useState(() => [...window.GF_MATERIALS_RAW]);
   const [form,  setForm]  = React.useState(null);
@@ -670,6 +715,8 @@ function CfgGranFormato({ onToast }) {
           ))}
         </tbody>
       </table>
+
+      <_GfParamsCard onToast={onToast} />
 
       {form && (
         <CfgModal title={form.id ? 'Editar material' : 'Nuevo material'} onClose={() => setForm(null)}
