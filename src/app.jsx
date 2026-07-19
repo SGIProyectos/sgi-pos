@@ -378,7 +378,8 @@ function _LoginNube({ onListo }) {
     try {
       await window.SGISync.login(email.trim(), pass);
       setMsg('Sincronizando datos…');
-      await window.SGISync.sync();
+      const r = await window.SGISync.sync();
+      if (r && r.error) { setMsg('Entraste, pero la sincronización falló. Reintenta.'); setBusy(false); return; }
       onListo();
     } catch (err) {
       setMsg(err && err.message === 'Invalid login credentials'
@@ -460,13 +461,15 @@ function Root() {
       try {
         const ses = await window.SGISync.init();
         if (!ses) { setFase('login'); return; }
-        let yaSync = false;
-        try { yaSync = sessionStorage.getItem('sgi_synced_boot') === '1'; } catch {}
-        if (!yaSync) {
-          const r = await window.SGISync.sync();
+        // sincroniza en CADA arranque; la bandera solo evita recargar en bucle
+        const r = await window.SGISync.sync();
+        let yaRecargo = false;
+        try { yaRecargo = sessionStorage.getItem('sgi_synced_boot') === '1'; } catch {}
+        if (r && r.cambios > 0 && !yaRecargo) {
           try { sessionStorage.setItem('sgi_synced_boot', '1'); } catch {}
-          if (r && r.cambios > 0) { location.reload(); return; }
+          location.reload(); return;
         }
+        try { sessionStorage.removeItem('sgi_synced_boot'); } catch {}
       } catch (e) { console.error('SGISync arranque:', e); }
       setFase('app');
     })();
