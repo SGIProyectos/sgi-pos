@@ -386,8 +386,8 @@ function CotizPrintDoc({ cot, partidas, subtotal, iva, total, retIsr, retIva, lo
             {[['Subtotal',fmt(subtotal)],['IVA 16%',fmt(iva)]].map(([l,v])=>(
               <div key={l} style={S.totRow}><span>{l}</span><span style={{fontFamily:'monospace'}}>{v}</span></div>
             ))}
+            {(retIva||0) > 0 && <div style={S.totRow}><span>I.V.A. retenido</span><span style={{fontFamily:'monospace'}}>− {fmt(retIva)}</span></div>}
             {(retIsr||0) > 0 && <div style={S.totRow}><span>I.S.R. retenido 1.25%</span><span style={{fontFamily:'monospace'}}>− {fmt(retIsr)}</span></div>}
-            {(retIva||0) > 0 && <div style={S.totRow}><span>IVA retenido 10.6667%</span><span style={{fontFamily:'monospace'}}>− {fmt(retIva)}</span></div>}
             <div style={S.totFin}>
               <strong style={{fontFamily:'Archivo Black,Arial,sans-serif',fontSize:13}}>TOTAL</strong>
               <strong style={{fontFamily:'monospace',fontSize:15,color:'#E85D04'}}>{fmt(total)}</strong>
@@ -685,15 +685,15 @@ function CotizEditor({ cot: init, onBack }) {
   const partidas  = cot.partidas || [];
   const subtotal  = round2(partidas.reduce((s,p) => s+(p.subtotal||0), 0));
   const iva       = round2(subtotal * 0.16);
-  // Retenciones al facturar a persona moral: ISR 1.25% siempre (Art. 113-J, RESICO);
-  // IVA retenido solo si facturan como servicio personal (raro — opcional, apagado)
-  const retiene   = !!cot.retiene;
-  const conIsr    = retiene && cot.retieneIsr !== false;
-  const conIvaRet = retiene && !!cot.retieneIva;
-  const retIsr    = conIsr    ? round2(subtotal * 0.0125) : 0;
-  const retIva    = conIvaRet ? round2(iva * 2 / 3) : 0;
+  // Retenciones al facturar a persona moral: ISR 1.25% siempre (Art. 113-J, RESICO).
+  // IVA retenido: gobierno/CFE retiene el 100% (Art. 3 LIVA); empresas privadas ⅔ solo en servicios.
+  const retiene    = !!cot.retiene;
+  const conIsr     = retiene && cot.retieneIsr !== false;
+  const modoIvaRet = !retiene ? '' : (cot.retIvaModo !== undefined ? cot.retIvaModo : (cot.retieneIva ? 'tercios' : ''));
+  const retIsr     = conIsr ? round2(subtotal * 0.0125) : 0;
+  const retIva     = modoIvaRet === 'total' ? iva : modoIvaRet === 'tercios' ? round2(iva * 2 / 3) : 0;
   // Igual que el CFDI: Total = Subtotal + IVA − retenciones (es lo que deposita el cliente)
-  const total     = round2(subtotal + iva - retIsr - retIva);
+  const total      = round2(subtotal + iva - retIsr - retIva);
 
   React.useEffect(() => { if (sections.length && !secTab) setSecTab(sections[0].id); }, [sections]);
 
@@ -1041,14 +1041,19 @@ function CotizEditor({ cot: init, onBack }) {
                   </label>
                   <span className="mono">{conIsr ? '− ' + fmt(retIsr) : 'no aplica'}</span>
                 </div>
-                <div className="cq-total-row" style={{color:conIvaRet?'var(--magenta)':'var(--text-3)'}}>
-                  <label style={{display:'flex',alignItems:'center',gap:6,cursor:locked?'default':'pointer',userSelect:'none'}}>
-                    <input type="checkbox" checked={conIvaRet} disabled={locked}
-                      onChange={e=>setF('retieneIva', e.target.checked)}
-                      style={{accentColor:'var(--magenta)'}}/>
-                    IVA retenido 10.6667% (solo servicios)
-                  </label>
-                  <span className="mono">{conIvaRet ? '− ' + fmt(retIva) : 'no aplica'}</span>
+                <div className="cq-total-row" style={{color:modoIvaRet?'var(--magenta)':'var(--text-3)'}}>
+                  <span style={{display:'flex',alignItems:'center',gap:6}}>
+                    I.V.A. retenido
+                    <select value={modoIvaRet} disabled={locked}
+                      onChange={e=>setF('retIvaModo', e.target.value)}
+                      style={{fontSize:'0.72rem',padding:'2px 4px',borderRadius:4,
+                        border:'1px solid var(--border)',background:'var(--bg-1)',color:'inherit'}}>
+                      <option value="">no aplica</option>
+                      <option value="tercios">⅔ del IVA — empresa privada (servicios)</option>
+                      <option value="total">100% del IVA — gobierno / CFE</option>
+                    </select>
+                  </span>
+                  <span className="mono">{modoIvaRet ? '− ' + fmt(retIva) : ''}</span>
                 </div>
               </>
             )}
