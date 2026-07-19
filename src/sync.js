@@ -45,19 +45,22 @@
   const escribe = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
   async function pushPendientes() {
-    if (!sesion || pendientes.size === 0) return;
+    if (!sesion || pendientes.size === 0) return true;
     const claves = [...pendientes].filter(esSync);
-    if (!claves.length) { pendientes.clear(); guardaPend(); return; }
+    if (!claves.length) { pendientes.clear(); guardaPend(); return true; }
     pon('sync');
-    const filas = claves.map(k => {
+    // subir de una en una: una clave enorme o corrupta no debe frenar al resto
+    let okTodas = true;
+    for (const k of claves) {
       const v = lee(k);
-      return { key: k, value: v === undefined ? null : v, updated_at: new Date().toISOString() };
-    });
-    const { error } = await cli.from('sgi_kv').upsert(filas);
-    if (error) { console.error('SGISync push:', error.message); pon('error'); return; }
-    claves.forEach(k => pendientes.delete(k));
+      const fila = { key: k, value: v === undefined ? null : v, updated_at: new Date().toISOString() };
+      const { error } = await cli.from('sgi_kv').upsert(fila);
+      if (error) { console.error('SGISync push', k, ':', error.message); okTodas = false; continue; }
+      pendientes.delete(k);
+    }
     guardaPend();
-    pon('ok');
+    pon(okTodas ? 'ok' : 'error');
+    return okTodas;
   }
 
   // Fusión por id: conserva la versión local de los ids en conflicto (traen
@@ -109,8 +112,8 @@
     });
 
     guardaPend();
-    await pushPendientes();
-    pon('ok');
+    const okPush = await pushPendientes();
+    pon(okPush ? 'ok' : 'error');
     return { cambios };
   }
 
