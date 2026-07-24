@@ -3811,3 +3811,273 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .bd-step span { font-size: .78rem; color: var(--text-2); font-weight: 600; }
 .bd-step-arrow { color: var(--text-3); font-size: .8rem; }
+
+
+/* ========== ANUNCIOS NEÓN (servicio) ========== */
+.neon-svc { display: flex; flex-direction: column; height: 100%; padding: 16px 20px; gap: 12px; overflow: hidden; }
+.neon-svc-head { display: flex; justify-content: space-between; align-items: flex-end; }
+.neon-svc-title { margin: 0; font-family: 'Archivo Black', sans-serif; font-size: 1.35rem; letter-spacing: 0.5px; }
+.neon-svc-sub   { margin: 3px 0 0; color: var(--text-2); font-size: 0.82rem; }
+.neon-svc-grid  {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: 1fr 340px;
+  gap: 12px;
+}
+.neon-svc-left, .neon-svc-right { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.neon-svc-right { overflow-y: auto; padding-right: 4px; }
+
+/* Botones */
+.neon-btn-primary {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--orange); color: #fff; border-radius: var(--radius);
+  padding: 9px 16px; font-weight: 600; font-size: 0.88rem;
+  transition: background .15s;
+}
+.neon-btn-primary:hover { background: var(--orange-hover); }
+.neon-btn-ghost {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 8px 14px; font-weight: 500; font-size: 0.85rem;
+  transition: background .15s, border-color .15s;
+}
+.neon-btn-ghost:hover { background: var(--bg-2); border-color: var(--border-2); }
+.neon-btn-ghost.active { background: var(--orange); color: #fff; border-color: var(--orange); }
+.neon-btn-small { padding: 5px 10px; font-size: 0.78rem; }
+
+/* Upload */
+.neon-upload {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; color: var(--text-3); text-align: center;
+  background: var(--surface); border: 2px dashed var(--border-2); border-radius: var(--radius-lg);
+  padding: 40px 20px; cursor: pointer;
+  transition: border-color .2s, background .2s, color .2s;
+}
+.neon-upload:hover, .neon-upload.dragging { border-color: var(--orange); background: var(--orange-soft); color: var(--orange); }
+.neon-upload-title { font-size: 1rem; font-weight: 600; color: var(--text); }
+.neon-upload-sub   { font-size: 0.82rem; }
+
+/* Barra de archivo */
+.neon-file-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 6px 12px; font-size: 0.82rem; color: var(--text-2); flex-shrink: 0;
+}
+.neon-file-bar > span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Visor SVG (canvas oscuro con glow) */
+.neon-canvas {
+  flex: 1; min-height: 260px; overflow: hidden; position: relative;
+  background: #0e0e12;
+  background-image:
+    linear-gradient(to right,  rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+  border-radius: var(--radius-lg);
+}
+.neon-canvas svg { display: block; width: 100%; height: 100%; padding: 20px; box-sizing: border-box; }
+.neon-canvas.adjusting { outline: 2px solid var(--orange); outline-offset: -2px; }
+.neon-canvas-empty {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px; color: rgba(255,255,255,0.35);
+}
+.neon-canvas-empty p { margin: 0; font-size: 0.86rem; }
+.neon-help {
+  background: var(--orange-soft); color: var(--orange);
+  border: 1px solid rgba(232,93,4,0.2);
+  border-radius: var(--radius); padding: 8px 12px;
+  font-size: 0.8rem; flex-shrink: 0;
+}
+
+/* Paneles del sidebar derecho */
+.neon-panel {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 12px 14px; flex-shrink: 0;
+}
+.neon-panel-h {
+  margin: 0 0 8px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--text-3); font-weight: 700;
+}
+.neon-mini-lbl {
+  display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--text-3); font-weight: 600; margin-bottom: 4px;
+}
+
+/* Dimensiones */
+.neon-dim-detected {
+  font-size: 0.76rem; color: var(--text-3);
+  background: var(--bg); border-radius: var(--radius);
+  padding: 6px 10px; margin-bottom: 10px; line-height: 1.4;
+}
+.neon-dim-detected strong { color: var(--text-2); font-weight: 700; }
+
+/* Readout base=X, neon=Y estilo tabla compacta */
+.neon-readout {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.neon-readout-row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+}
+.neon-readout-lbl {
+  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--text-3); font-weight: 700;
+}
+.neon-readout-val { font-size: 0.95rem; font-weight: 700; color: var(--text-1); }
+.neon-readout-src {
+  margin-top: 6px; font-size: 0.7rem; color: var(--text-3); line-height: 1.4;
+}
+.neon-override-btn { width: 100%; margin-top: 8px; justify-content: center; text-align: center; }
+
+.neon-dim-row {
+  display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 8px;
+  align-items: end; margin-top: 8px;
+}
+.neon-dim-field { min-width: 0; }
+.neon-dim-field label {
+  display: block; font-size: 0.7rem; text-transform: uppercase;
+  color: var(--text-3); letter-spacing: 0.4px; margin-bottom: 4px; font-weight: 600;
+}
+.neon-dim-input {
+  display: flex; align-items: center; gap: 4px; min-width: 0;
+  background: var(--bg); border: 1.5px solid var(--border); border-radius: var(--radius);
+  padding: 3px 8px;
+}
+.neon-dim-field:focus-within .neon-dim-input { border-color: var(--orange); }
+.neon-dim-input input {
+  flex: 1; min-width: 0; width: 100%; background: transparent; border: none; outline: none;
+  padding: 4px 0; font-size: 0.88rem; font-weight: 700; text-align: right;
+}
+.neon-dim-input span { color: var(--text-3); font-size: 0.72rem; font-weight: 600; flex-shrink: 0; }
+.neon-dim-x { padding-bottom: 12px; color: var(--text-3); font-size: 1rem; font-weight: 600; }
+.neon-readonly { color: var(--text-3); font-style: italic; }
+
+.neon-lm-detect {
+  margin-top: 10px; display: flex; align-items: center; gap: 6px;
+  background: var(--orange-soft); border: 1px solid rgba(232,93,4,0.2);
+  border-radius: var(--radius); padding: 7px 10px;
+  font-size: 0.85rem; color: var(--text);
+}
+.neon-lm-detect strong { color: var(--orange); }
+
+/* Selectores y controles varios */
+.neon-select {
+  width: 100%; padding: 7px 10px; font-size: 0.85rem;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.neon-select:focus { outline: none; border-color: var(--orange); }
+.neon-two-cols { display: grid; grid-template-columns: 130px 1fr; gap: 8px; margin-top: 8px; }
+.neon-uniones {
+  display: flex; align-items: center; gap: 4px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 3px;
+}
+.neon-uniones button {
+  width: 24px; height: 24px; display: grid; place-items: center;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 3px;
+  color: var(--text-2);
+}
+.neon-uniones button:hover { background: var(--orange); color: #fff; border-color: var(--orange); }
+.neon-uniones input {
+  flex: 1; width: 40px; text-align: center; background: transparent;
+  border: none; outline: none; font-weight: 700; font-size: 0.9rem;
+}
+
+/* Formas de base */
+.neon-forma-btns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 5px; margin-top: 8px;
+}
+.neon-forma-btn {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 6px 8px; text-align: left;
+  font-size: 0.72rem; font-weight: 500; line-height: 1.2;
+  white-space: normal; word-break: break-word; min-width: 0;
+  transition: background .15s;
+}
+.neon-forma-btn:hover { background: var(--bg-2); }
+.neon-forma-btn.active { background: var(--black); color: #fff; border-color: var(--black); }
+.neon-forma-extra { font-size: 0.66rem; color: var(--orange); font-weight: 600; }
+.neon-forma-btn.active .neon-forma-extra { color: var(--yellow); }
+
+.neon-check {
+  display: flex; align-items: center; gap: 8px; margin-top: 10px;
+  font-size: 0.8rem; color: var(--text-2); cursor: pointer;
+}
+.neon-check input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; }
+.neon-hint { font-size: 0.72rem; color: var(--text-3); margin-top: 3px; }
+
+/* Panel de total */
+.neon-total-panel {
+  background: #1a1a1a; color: #fff; border-radius: var(--radius-lg);
+  padding: 12px 14px; flex-shrink: 0;
+  border: 1px solid #2a2a2a;
+}
+.neon-total-lines { display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px; }
+.neon-total-line { display: flex; justify-content: space-between; font-size: 0.78rem; color: #bbb; }
+.neon-total-line span:last-child { color: #fff; }
+.neon-total-mo  { padding-top: 4px; border-top: 1px dashed #333; margin-top: 4px; }
+.neon-total-sub { color: #fff !important; font-weight: 600; padding-top: 4px; border-top: 1px dashed #333; margin-top: 4px; }
+.neon-total-big {
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--orange); color: #fff; padding: 10px 14px;
+  border-radius: var(--radius); font-family: 'Archivo Black', sans-serif;
+  font-size: 1.05rem; letter-spacing: 0.5px; margin-bottom: 10px;
+}
+.neon-total-empty {
+  text-align: center; color: #888; padding: 12px 8px;
+  font-size: 0.82rem; margin-bottom: 10px;
+}
+.neon-btn-add {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--orange); color: #fff; border-radius: var(--radius);
+  padding: 10px; font-weight: 700; font-size: 0.92rem; font-family: 'Archivo Black', sans-serif;
+  transition: background .15s;
+}
+.neon-btn-add:hover:not(:disabled) { background: var(--orange-hover); }
+.neon-btn-add:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Config modal */
+.neon-cfg-modal { max-width: 780px; width: 92vw; }
+.neon-cfg-tabs { display: flex; gap: 4px; padding: 0 20px; border-bottom: 1px solid var(--border); }
+.neon-cfg-tab {
+  padding: 10px 14px; font-size: 0.86rem; font-weight: 500; color: var(--text-2);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.neon-cfg-tab.active { color: var(--orange); border-bottom-color: var(--orange); font-weight: 700; }
+.neon-cfg-body { max-height: 60vh; overflow-y: auto; }
+.neon-cfg-h {
+  margin: 20px 0 10px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--orange); font-weight: 700;
+}
+.neon-cfg-h:first-child { margin-top: 4px; }
+.neon-cfg-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.neon-num { padding: 6px 8px; text-align: right; }
+.neon-urg-list { display: flex; flex-direction: column; gap: 6px; }
+.neon-urg-row { display: grid; grid-template-columns: 2fr 2fr 1fr auto; gap: 6px; align-items: center; }
+.neon-urg-row input {
+  padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg); font-size: 0.84rem;
+}
+.neon-icon-btn {
+  width: 28px; height: 28px; display: grid; place-items: center;
+  color: var(--text-3); border-radius: var(--radius);
+}
+.neon-icon-btn:hover { background: rgba(220,38,38,0.1); color: #dc2626; }
+.neon-perfil-tab { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+.neon-perfil-tab th {
+  padding: 8px 6px; text-align: left; background: var(--bg); color: var(--text-2);
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.4px;
+  border-bottom: 1px solid var(--border);
+}
+.neon-perfil-tab td { padding: 4px; border-bottom: 1px solid var(--border); }
+.neon-perfil-tab td.c { text-align: center; }
+.neon-perfil-tab input {
+  width: 100%; padding: 5px 7px; font-size: 0.82rem;
+  border: 1px solid transparent; background: transparent; border-radius: 4px;
+}
+.neon-perfil-tab input:focus { border-color: var(--orange); background: var(--surface); outline: none; }
+
+

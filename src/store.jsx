@@ -47,6 +47,7 @@ const MODULES = [
   { id: 'copiado',        name: 'Centro de Copiado', short: 'Copiado',      Icon: window.IconCopy,     hotkey: 'F1' },
   { id: 'granformato',    name: 'Gran Formato',       short: 'Gran Formato', Icon: window.IconLayout,   hotkey: 'F2' },
   { id: 'bordado',        name: 'Bordado',            short: 'Bordado',      Icon: window.IconNeedle,   hotkey: 'F3' },
+  { id: 'anuncios-neon', name: 'Anuncios Neón',      short: 'Neón',         Icon: window.IconBolt,     hotkey: 'F4' },
   { id: 'pedidos',       name: 'Pedidos',            short: 'Pedidos',      Icon: window.IconNote,     hotkey: null, admin: true },
   { id: 'cotizador',    name: 'Cotizador Express',   short: 'Cotizador',    Icon: window.IconFileText, hotkey: null, admin: true },
   { id: 'contabilidad',  name: 'Contabilidad',       short: 'Conta',        Icon: window.IconReceipt,  hotkey: null, admin: true },
@@ -286,6 +287,321 @@ if (BORDADO_PRECIOS.densTrazo === 50.71 && BORDADO_PRECIOS.densArea === 94.75 &&
   BORDADO_PRECIOS.densLinea = _BP_DEFAULTS.densLinea;
 }
 
+// ===== ANUNCIOS NEÓN =====
+// Cotizador de letreros/rotulación en neón LED por metros lineales.
+//
+// Modelo (todo en MXN, todo desde catálogo — la función pura NO tiene números):
+//   insumos      = neónFlex + cable + silicón + soldadura + fuentes + accesorios
+//   costoDirecto = insumos + manoObra
+//   subtotal     = costoDirecto · (1 + merma)
+//   precio       = subtotal · (1 + margen) · urgenciaMult
+//   precioIva    = precio · 1.16
+
+// Perfiles del neón (mini/estándar/premium × colores comunes).
+// precioM = precio del neón por metro; wattsM = consumo por metro (para dimensionar fuente)
+const _NEON_PERFILES_DEFAULTS = [
+  { id:'mini-blanco',   nombre:'Neón Mini 6mm',      color:'Blanco cálido', precioM:180, wattsM:8,  activo:true },
+  { id:'mini-azul',     nombre:'Neón Mini 6mm',      color:'Azul',          precioM:200, wattsM:8,  activo:true },
+  { id:'mini-rojo',     nombre:'Neón Mini 6mm',      color:'Rojo',          precioM:200, wattsM:8,  activo:true },
+  { id:'mini-verde',    nombre:'Neón Mini 6mm',      color:'Verde',         precioM:200, wattsM:8,  activo:true },
+  { id:'std-blanco',    nombre:'Neón Estándar 12mm', color:'Blanco cálido', precioM:240, wattsM:12, activo:true },
+  { id:'std-blancof',   nombre:'Neón Estándar 12mm', color:'Blanco frío',   precioM:240, wattsM:12, activo:true },
+  { id:'std-azul',      nombre:'Neón Estándar 12mm', color:'Azul',          precioM:260, wattsM:12, activo:true },
+  { id:'std-rojo',      nombre:'Neón Estándar 12mm', color:'Rojo',          precioM:260, wattsM:12, activo:true },
+  { id:'std-rosa',      nombre:'Neón Estándar 12mm', color:'Rosa',          precioM:280, wattsM:12, activo:true },
+  { id:'std-amarillo',  nombre:'Neón Estándar 12mm', color:'Amarillo',      precioM:260, wattsM:12, activo:true },
+  { id:'std-verde',     nombre:'Neón Estándar 12mm', color:'Verde',         precioM:260, wattsM:12, activo:true },
+  { id:'std-rgb',       nombre:'Neón Estándar 12mm', color:'RGB',           precioM:420, wattsM:14, activo:true },
+  { id:'prem-blanco',   nombre:'Neón Premium 16mm',  color:'Blanco cálido', precioM:340, wattsM:16, activo:true },
+  { id:'prem-rgb',      nombre:'Neón Premium 16mm',  color:'RGB direccionable', precioM:580, wattsM:18, activo:true },
+];
+let NEON_PERFILES_RAW = storageLoad('sgi_neon_perfiles', _NEON_PERFILES_DEFAULTS);
+let NEON_PERFILES     = NEON_PERFILES_RAW.filter(p => p.activo !== false);
+
+// Parámetros generales editables (todos MXN salvo indicadores):
+//   silMlPorM  ml de silicón consumidos por metro de trazo
+//   silPrecio  MXN por ml de silicón
+//   cableM     MXN por metro de cable acoplado al neón
+//   costoUnion MXN por unión/soldadura
+//   fuenteW    watts de la fuente estándar (para dimensionar)
+//   fuentePrecio MXN por fuente
+//   fuenteFactor factor de seguridad (0.8 = usar 80% de la capacidad de la fuente)
+//   accesM     MXN por metro para conectores/tornillería/tapas prorrateados
+//   mPorMin    metros instalados por minuto (velocidad de mano de obra)
+//   tarifaHora MXN por hora del técnico
+//   merma      fracción sobre insumos (0.05 = 5%)
+//   margen     fracción sobre costo directo (0.35 = 35%)
+//   urgencias  lista de niveles con multiplicador final
+const _NEON_PARAMS_DEFAULTS = {
+  cableM:        18,      // MXN por metro de cable
+  accesM:        35,      // MXN por metro de accesorios (grapas, tornillos, conectores)
+  consumiblesPct: 0.08,   // 8% sobre materiales: cianoacrilato + soldadura + varios
+  fuenteFactor:  0.80,    // factor de seguridad (usar 80% de capacidad de la fuente)
+  mPorMin:       0.6,     // metros de neón que se instalan por minuto
+  tarifaHora:    180,     // MXN/h de mano de obra
+  merma:         0.05,    // 5% sobre insumos
+  margen:        0.35,    // 35% sobre costo directo
+  desperdicioUmbralCm: 30, // Tiras sobrantes ≤ este ancho se cobran (asume no reutilizables).
+                           // Tiras > este ancho se asumen reutilizables y no se cobran.
+  // Catálogo de fuentes de poder / adaptadores / pilas. watts=0 para portátil.
+  fuentes: [
+    { id:'f60',   nombre:'Fuente 60W',                watts:60,  precio:280,  tipo:'fuente',    activo:true },
+    { id:'f100',  nombre:'Fuente 100W estándar',      watts:100, precio:380,  tipo:'fuente',    activo:true },
+    { id:'f150',  nombre:'Fuente 150W',               watts:150, precio:520,  tipo:'fuente',    activo:true },
+    { id:'f200',  nombre:'Fuente 200W',               watts:200, precio:680,  tipo:'fuente',    activo:true },
+    { id:'f300',  nombre:'Fuente 300W',               watts:300, precio:980,  tipo:'fuente',    activo:true },
+    { id:'ad12',  nombre:'Adaptador 12V 5A (60W)',    watts:60,  precio:150,  tipo:'adaptador', activo:true },
+    { id:'ad24',  nombre:'Adaptador 24V 3A (72W)',    watts:72,  precio:220,  tipo:'adaptador', activo:true },
+    { id:'p9v',   nombre:'Pila 9V (portátil)',        watts:9,   precio:80,   tipo:'pila',      activo:true },
+    { id:'plit',  nombre:'Batería Li-ion recargable', watts:40,  precio:450,  tipo:'pila',      activo:true },
+  ],
+  // Catálogo de consumibles (referencia de inventario y precios).
+  // El costo se calcula con consumiblesPct, esto es para tener registro de qué se usa.
+  consumibles: [
+    { id:'ca-loctite', nombre:'Cianoacrilato Loctite 401', precio:120, unidad:'pza',   activo:true },
+    { id:'ca-3m',      nombre:'Cianoacrilato 3M',           precio:95,  unidad:'pza',   activo:true },
+    { id:'ca-kola',    nombre:'Kola Loka (genérico)',       precio:35,  unidad:'pza',   activo:true },
+    { id:'sold-est',   nombre:'Soldadura estaño 60/40 1mm', precio:180, unidad:'rollo', activo:true },
+    { id:'flux',       nombre:'Flux para soldadura',        precio:80,  unidad:'pza',   activo:true },
+    { id:'termo',      nombre:'Termofit 3mm surtido',       precio:120, unidad:'juego', activo:true },
+  ],
+  // Bases donde se monta el neón.
+  //   tipoPrecio='lamina' → se compra por lámina completa (acrílico, PVC, trovicel, alucobond).
+  //                        precioLamina, laminaW, laminaH definen el precio y el tamaño de la lámina.
+  //                        El sistema calcula el costo del pedazo usado y opcionalmente el desperdicio.
+  //   tipoPrecio='pieza'  → se compra ya cortado a medida (MDF). precioM2 se cobra directo por área.
+  bases: [
+    { id:'acr-3-tr',    nombre:'Acrílico transparente 3mm', tipoPrecio:'lamina', laminaW:120, laminaH:240, precioLamina:2450, activo:true },
+    { id:'acr-6-tr',    nombre:'Acrílico transparente 6mm', tipoPrecio:'lamina', laminaW:120, laminaH:240, precioLamina:4030, activo:true },
+    { id:'acr-3-neg',   nombre:'Acrílico negro 3mm',        tipoPrecio:'lamina', laminaW:120, laminaH:240, precioLamina:2590, activo:true },
+    { id:'acr-6-neg',   nombre:'Acrílico negro 6mm',        tipoPrecio:'lamina', laminaW:120, laminaH:240, precioLamina:4180, activo:true },
+    { id:'mdf-6-crudo', nombre:'MDF 6mm crudo',             tipoPrecio:'pieza',  precioM2:280,  activo:true },
+    { id:'mdf-6-pint',  nombre:'MDF 6mm pintado',           tipoPrecio:'pieza',  precioM2:520,  activo:true },
+    { id:'mdf-9-pint',  nombre:'MDF 9mm pintado',           tipoPrecio:'pieza',  precioM2:680,  activo:true },
+    { id:'pvc-3',       nombre:'PVC espumado 3mm',          tipoPrecio:'lamina', laminaW:120, laminaH:240, precioLamina:1090, activo:true },
+    { id:'pvc-6',       nombre:'PVC espumado 6mm',          tipoPrecio:'lamina', laminaW:120, laminaH:240, precioLamina:1790, activo:true },
+    { id:'trov-3',      nombre:'Trovicel 3mm',              tipoPrecio:'lamina', laminaW:120, laminaH:240, precioLamina:980,  activo:true },
+    { id:'aluco-3',     nombre:'Alucobond 3mm',             tipoPrecio:'lamina', laminaW:120, laminaH:240, precioLamina:3600, activo:true },
+    { id:'sin-base',    nombre:'Sin base (solo neón)',      tipoPrecio:'pieza',  precioM2:0,    activo:true },
+  ],
+  // Formas de la base. factorArea = fracción del rectángulo aprovechada
+  //   (rect = 1.0; silueta calada aprovecha menos por los recortes internos y perímetro complejo).
+  // corteM = MXN por metro de corte extra en el contorno (láser/CNC) — solo aplica a silueta.
+  formas: [
+    { id:'rect',       nombre:'Rectangular',       factorArea:1.00, corteM:0  },
+    { id:'silueta',    nombre:'Silueta / calada',  factorArea:0.85, corteM:35 },
+    { id:'redondeada', nombre:'Rectangular c/ esquinas', factorArea:0.98, corteM:12 },
+  ],
+  soportePrecio: 180,   // costo de kit de separadores/soportes por anuncio
+  urgencias: [
+    { id:'normal',  nombre:'Normal',  dias:'7–10 días', mult:1.00 },
+    { id:'rapido',  nombre:'Rápido',  dias:'4–5 días',  mult:1.20 },
+    { id:'express', nombre:'Express', dias:'48–72 hrs', mult:1.45 },
+  ],
+};
+let NEON_PARAMS = (() => {
+  const raw = storageLoad('sgi_neon_params', {});
+  const clean = { ..._NEON_PARAMS_DEFAULTS };
+  for (const k of Object.keys(_NEON_PARAMS_DEFAULTS)) {
+    if (raw && raw[k] !== undefined) clean[k] = raw[k];
+  }
+  return clean;
+})();
+
+// ── FUNCIÓN PURA DE CÁLCULO ──────────────────────────────────────────────────
+// Entradas:
+//   Lm            longitud lineal de neón (metros)
+//   uniones       # de uniones/soldaduras
+//   perfil        { precioM, wattsM } del catálogo
+//   dimensiones   { anchoCm, altoCm } del anuncio (para calcular área de base)
+//   base          { material, forma, incluirSoporte } — material y forma vienen del catálogo
+//   params        parámetros generales del catálogo
+//   urgenciaMult  multiplicador final (1.0 normal, 1.2 rápido, etc.)
+// Devuelve el desglose completo. Sin lecturas de window, sin fetch, sin new Date.
+function calcularNeon({ Lm, uniones, perfil, fuente, dimensiones, base, params, urgenciaMult, manoObraOverride }) {
+  const L   = Math.max(0, Number(Lm) || 0);
+  const un  = Math.max(0, Math.floor(Number(uniones) || 0));
+  const P   = perfil || { precioM: 0, wattsM: 0 };
+  const p   = params || _NEON_PARAMS_DEFAULTS;
+  const urg = Math.max(0.01, Number(urgenciaMult) || 1);
+  const dim = dimensiones || { anchoCm: 0, altoCm: 0 };
+  const bMat = base?.material || { nombre:'Sin base', precioM2: 0 };
+  const bFor = base?.forma    || { nombre:'Rectangular', factorArea: 1, corteM: 0 };
+  // Fuente elegida (fallback a la primera del catálogo si no viene)
+  const F = fuente || (p.fuentes || []).find(f => f.activo !== false) || { nombre:'Fuente', watts:100, precio:380 };
+
+  // Cuántas fuentes se necesitan según capacidad efectiva (watts × factor de seguridad)
+  const capFuente  = (F.watts || 0) * p.fuenteFactor;
+  const wattsTotal = L * P.wattsM;
+  const numFuentes = capFuente > 0 ? Math.max(L > 0 ? 1 : 0, Math.ceil(wattsTotal / capFuente)) : 0;
+
+  // Base: dos modelos según cómo se compra el material.
+  //   pieza  → precio por m² directo (MDF: ya lo compras cortado a medida)
+  //   lamina → precio por lámina completa; se calcula MXN/cm² y se cobra el área usada
+  //            (opcionalmente + tira de desperdicio si base.cobrarDesperdicio)
+  const anchoCm = Number(dim.anchoCm) || 0;
+  const altoCm  = Number(dim.altoCm)  || 0;
+  const anchoM  = anchoCm / 100;
+  const altoM   = altoCm  / 100;
+  const areaRectM2 = round2(anchoM * altoM * 100) / 100;                       // rectángulo contenedor
+  const areaM2     = round2(areaRectM2 * (bFor.factorArea || 1) * 100) / 100;  // área útil (con factor de forma)
+  const perimM     = round2(2 * (anchoM + altoM) * 100) / 100;
+
+  let importeBase = 0;
+  let importeBaseAuto = 0; // sugerencia calculada (para UI cuando hay override)
+  let importeDesperdicio = 0;
+  let desperdicioM2 = 0;
+  let desperdicioTiraCm = 0;
+  const tipo = bMat.tipoPrecio || (bMat.precioLamina ? 'lamina' : 'pieza');
+
+  if (tipo === 'lamina') {
+    const lW = Number(bMat.laminaW) || 120;
+    const lH = Number(bMat.laminaH) || 240;
+    const laminaCm2   = lW * lH;
+    const precioLam   = Number(bMat.precioLamina) || 0;
+    const precioCm2   = laminaCm2 > 0 ? precioLam / laminaCm2 : 0;
+    const areaCm2Util = areaM2 * 10000;
+    importeBase = round2(areaCm2Util * precioCm2);
+
+    if (base?.cobrarDesperdicio && anchoCm > 0 && altoCm > 0 && precioCm2 > 0) {
+      // Elige la mejor orientación: la que deja tira lateral más chica y >=0.
+      const gaps = [];
+      if (anchoCm <= lW && altoCm <= lH) gaps.push(lW - anchoCm);
+      if (altoCm  <= lW && anchoCm <= lH) gaps.push(lW - altoCm);
+      if (gaps.length) {
+        desperdicioTiraCm = Math.min(...gaps);
+        // Solo se cobra si la tira es angosta (≤ umbral). Tiras anchas se asumen reutilizables.
+        const umbral = Number(p.desperdicioUmbralCm) || 30;
+        if (desperdicioTiraCm > 0 && desperdicioTiraCm <= umbral) {
+          const wasteCm2 = desperdicioTiraCm * lH;
+          desperdicioM2      = round2(wasteCm2 / 10000 * 100) / 100;
+          importeDesperdicio = round2(wasteCm2 * precioCm2);
+        }
+        // Si tira > umbral, desperdicioTiraCm se conserva para mostrar en UI
+        // pero desperdicioM2 e importeDesperdicio quedan en 0.
+      }
+    }
+  } else {
+    // Pieza — se compra ya cortada. Si viene override manual, se usa ese costo.
+    // Si no, se estima como area × precioM2 (referencia; el proveedor real puede variar).
+    importeBaseAuto = round2(areaM2 * (bMat.precioM2 || 0));
+    const overridePieza = Number(base?.piezaCostoOverride);
+    importeBase = overridePieza > 0 ? round2(overridePieza) : importeBaseAuto;
+  }
+
+  const importeCorte  = round2(perimM * (bFor.corteM || 0));
+  const importeCorteExtra = round2(Math.max(0, Number(base?.corteExtra) || 0));
+  const importeSoport = base?.incluirSoporte ? (p.soportePrecio || 0) : 0;
+
+  // Insumos: partidas por metro/unidad + base + corte
+  const insumos = [
+    { concepto:'Neón LED',              cantidad:L,       unidad:'m',      unit:P.precioM,      importe:round2(L * P.precioM) },
+    { concepto:'Cable',                  cantidad:L,       unidad:'m',      unit:p.cableM,       importe:round2(L * p.cableM) },
+    { concepto:'Accesorios',             cantidad:L,       unidad:'m',      unit:p.accesM,       importe:round2(L * p.accesM) },
+    { concepto:F.nombre,                 cantidad:numFuentes, unidad:'pza', unit:F.precio,       importe:round2(numFuentes * (F.precio||0)) },
+  ];
+  if (importeBase > 0) {
+    const unitBase = tipo === 'lamina' && bMat.precioLamina
+      ? round2((bMat.precioLamina / ((bMat.laminaW||120) * (bMat.laminaH||240))) * 10000) // MXN/m² efectivo
+      : (bMat.precioM2 || 0);
+    insumos.push({ concepto:`Base · ${bMat.nombre} (${bFor.nombre})`, cantidad:areaM2, unidad:'m²', unit:unitBase, importe:importeBase });
+  }
+  if (importeDesperdicio > 0) {
+    insumos.push({
+      concepto:`Desperdicio de lámina (tira ${desperdicioTiraCm.toFixed(0)} cm)`,
+      cantidad:desperdicioM2, unidad:'m²',
+      unit:round2(importeDesperdicio / (desperdicioM2 || 1)),
+      importe:importeDesperdicio,
+    });
+  }
+  if (importeCorte > 0) {
+    insumos.push({ concepto:`Corte especial (${bFor.nombre})`, cantidad:perimM, unidad:'m', unit:bFor.corteM, importe:importeCorte });
+  }
+  if (importeCorteExtra > 0) {
+    insumos.push({ concepto:'Corte láser adicional (manual)', cantidad:1, unidad:'lote', unit:importeCorteExtra, importe:importeCorteExtra });
+  }
+  if (importeSoport > 0) {
+    insumos.push({ concepto:'Kit de separadores / soportes', cantidad:1, unidad:'kit', unit:p.soportePrecio, importe:importeSoport });
+  }
+  // Consumibles = % sobre materiales (cianoacrilato, soldadura, varios menores)
+  const pct = Math.max(0, Number(p.consumiblesPct) || 0);
+  const baseParaPct   = insumos.reduce((s, x) => s + x.importe, 0);
+  const importeConsum = round2(baseParaPct * pct);
+  if (importeConsum > 0) {
+    insumos.push({
+      concepto:`Consumibles (cianoacrilato + soldadura) · ${Math.round(pct*100)}%`,
+      cantidad:1, unidad:'lote', unit:importeConsum, importe:importeConsum,
+    });
+  }
+  const totalInsumos = round2(insumos.reduce((s, x) => s + x.importe, 0));
+
+  // Mano de obra: default = Lm × velocidad × tarifa; override manual desde el módulo si viene.
+  const horas       = p.mPorMin > 0 ? L / p.mPorMin / 60 : 0;
+  const manoObraAuto = round2(horas * p.tarifaHora);
+  const manoObra    = (manoObraOverride !== undefined && manoObraOverride !== null && manoObraOverride !== '')
+    ? round2(Math.max(0, Number(manoObraOverride) || 0))
+    : manoObraAuto;
+
+  const costoDirecto = round2(totalInsumos + manoObra);
+  const subtotal     = round2(costoDirecto * (1 + p.merma));
+  const precio       = round2(subtotal * (1 + p.margen) * urg);
+  const iva          = round2(precio * 0.16);
+  const precioIva    = round2(precio + iva);
+
+  return {
+    Lm: L, uniones: un, wattsTotal: round2(wattsTotal), numFuentes,
+    fuenteNombre: F.nombre, fuenteWatts: F.watts || 0, fuenteTipo: F.tipo || 'fuente',
+    anchoCm: dim.anchoCm || 0, altoCm: dim.altoCm || 0, areaM2, perimM,
+    baseMat: bMat.nombre, baseTipo: tipo, baseForma: bFor.nombre,
+    importeBase, importeBaseAuto,
+    desperdicioM2, desperdicioTiraCm, importeDesperdicio,
+    insumos, totalInsumos,
+    horas: round2(horas * 100) / 100, manoObra, manoObraAuto,
+    costoDirecto, merma: p.merma, margen: p.margen, urgenciaMult: urg,
+    subtotal, precio, iva, precioIva,
+  };
+}
+
+// Persistencia de cotizaciones de neón
+let NEON_COTIZ_LIST = storageLoad('sgi_neon_cotiz', []);
+
+function refreshNeonPerfiles(raw) {
+  storageSave('sgi_neon_perfiles', raw);
+  window.NEON_PERFILES_RAW = raw;
+  window.NEON_PERFILES = raw.filter(p => p.activo !== false);
+}
+function refreshNeonParams(data) {
+  // Empezar de los defaults y sobreponer solo las llaves conocidas,
+  // así se limpian valores obsoletos (silMlPorM, silPrecio, costoUnion)
+  const clean = { ..._NEON_PARAMS_DEFAULTS };
+  for (const k of Object.keys(_NEON_PARAMS_DEFAULTS)) {
+    if (data && data[k] !== undefined) clean[k] = data[k];
+  }
+  storageSave('sgi_neon_params', clean);
+  window.NEON_PARAMS = clean;
+}
+function saveNeonCotiz(cot) {
+  const raw = storageLoad('sgi_neon_cotiz', []);
+  const idx = raw.findIndex(c => c.id === cot.id);
+  const next = idx >= 0 ? raw.map(c => c.id === cot.id ? cot : c) : [cot, ...raw];
+  storageSave('sgi_neon_cotiz', next);
+  window.NEON_COTIZ_LIST = next;
+  return cot;
+}
+function deleteNeonCotiz(id) {
+  const next = storageLoad('sgi_neon_cotiz', []).filter(c => c.id !== id);
+  storageSave('sgi_neon_cotiz', next);
+  window.NEON_COTIZ_LIST = next;
+}
+function nextNeonFolio() {
+  const yr  = new Date().getFullYear();
+  const key = `sgi_neon_folio_${yr}`;
+  const n   = (parseInt(localStorage.getItem(key) || '0', 10) || 0) + 1;
+  localStorage.setItem(key, String(n));
+  if (window.SGISync) window.SGISync.queuePush(key);
+  return `NEON-${yr}-${String(n).padStart(4, '0')}`;
+}
+
 // ===== USUARIOS =====
 const _US_DEFAULTS = [
   { id:'u1', nombre:'Ana Martínez',  initials:'AM', rol:'cajero', pin:'1234', activo:true },
@@ -446,6 +762,7 @@ const _BK_ALL_KEYS = [
   'sgi_pedidos','sgi_backup_cfg','sgi_backup_meta',
   'sgi_coti_catalog','sgi_cotizaciones','sgi_api_key',
   'sgi_tickets_pausados',
+  'sgi_neon_perfiles','sgi_neon_params','sgi_neon_cotiz',
 ];
 
 function refreshBackupConfig(cfg) {
@@ -667,5 +984,9 @@ Object.assign(window, {
   BACKUP_CONFIG, BACKUP_META_LIST,
   refreshBackupConfig, saveBackupRecord, deleteBackupRecord,
   collectBackupData, restoreBackupData, isBackupOverdue, printSgiDoc,
+  NEON_PERFILES_RAW, NEON_PERFILES, NEON_PERFILES_DEFAULTS: _NEON_PERFILES_DEFAULTS,
+  NEON_PARAMS, NEON_PARAMS_DEFAULTS: _NEON_PARAMS_DEFAULTS,
+  NEON_COTIZ_LIST, calcularNeon,
+  refreshNeonPerfiles, refreshNeonParams, saveNeonCotiz, deleteNeonCotiz, nextNeonFolio,
   SEED_SALES,
 });

@@ -311,9 +311,10 @@ function App() {
   const isFullScreen = ['config', 'contabilidad', 'pedidos', 'cotizador'].includes(activeModule);
 
   const ModuleComp = {
-    copiado:     window.ModuleCopiado,
-    granformato: window.ModuleGranFormato,
-    bordado:     window.ModuleBordado,
+    copiado:          window.ModuleCopiado,
+    granformato:      window.ModuleGranFormato,
+    bordado:          window.ModuleBordado,
+    'anuncios-neon':  window.ModuleAnunciosNeon,
   }[activeModule];
 
   return (
@@ -323,10 +324,10 @@ function App() {
         {isFullScreen ? (
           <div className="left-panel cfg-full">
             <div className="module-area">
-              {activeModule === 'config'        && <window.ModuleConfig />}
-              {activeModule === 'contabilidad'  && <window.ModuleContabilidad sales={sales} />}
-              {activeModule === 'pedidos'       && <window.ModulePedidos />}
-              {activeModule === 'cotizador'     && <window.ModuleCotizador />}
+              {activeModule === 'config'         && <window.ModuleConfig />}
+              {activeModule === 'contabilidad'   && <window.ModuleContabilidad sales={sales} />}
+              {activeModule === 'pedidos'        && <window.ModulePedidos />}
+              {activeModule === 'cotizador'      && <window.ModuleCotizador />}
             </div>
           </div>
         ) : (
