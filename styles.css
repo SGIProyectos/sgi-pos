@@ -3910,6 +3910,21 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .neon-dim-detected strong { color: var(--text-2); font-weight: 700; }
 
+/* Warning técnico (elementos del neón por debajo del mínimo del perfil) */
+.neon-warn {
+  background: rgba(255, 193, 7, 0.10);
+  border: 1px solid rgba(255, 193, 7, 0.5);
+  border-left: 4px solid #FFC107;
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+.neon-warn-title {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.78rem; font-weight: 700; color: #b58100; margin-bottom: 4px;
+}
+.neon-warn-body { font-size: 0.76rem; color: var(--text-2); line-height: 1.4; }
+.neon-warn-body strong { color: var(--text-1); }
+
 /* Readout base=X, neon=Y estilo tabla compacta */
 .neon-readout {
   background: var(--bg); border: 1px solid var(--border);

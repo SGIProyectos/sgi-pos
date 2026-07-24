@@ -385,7 +385,7 @@ function _NeonConfigModal({ onClose }) {
   const updPerfil = (idx, k, v) => setPerfiles(ps => ps.map((p,i) => i===idx ? { ...p, [k]: v } : p));
   const rmPerfil  = (idx) => setPerfiles(ps => ps.filter((_,i) => i!==idx));
   const addPerfil = () => setPerfiles(ps => [...ps, {
-    id:'perfil'+Date.now(), nombre:'Nuevo perfil', color:'Blanco', precioM:0, wattsM:0, activo:true,
+    id:'perfil'+Date.now(), nombre:'Nuevo perfil', color:'Blanco', precioM:0, wattsM:0, alturaMinCm:5, activo:true,
   }]);
 
   const bases       = params.bases       || [];
@@ -520,8 +520,12 @@ function _NeonConfigModal({ onClose }) {
           )}
           {tab === 'perfiles' && (
             <div>
+              <p className="neon-hint" style={{marginBottom:10}}>
+                <strong>Altura mín</strong>: la altura mínima de letra/forma que se puede formar con esa manguera
+                (por radio de curvatura). Debajo de ese valor, el sistema muestra advertencia al cotizar.
+              </p>
               <table className="neon-perfil-tab">
-                <thead><tr><th>Perfil</th><th>Color</th><th>Precio/m</th><th>Watts/m</th><th>Activo</th><th></th></tr></thead>
+                <thead><tr><th>Perfil</th><th>Color</th><th>Precio/m</th><th>Watts/m</th><th>Altura mín (cm)</th><th>Activo</th><th></th></tr></thead>
                 <tbody>
                   {perfiles.map((p,i) => (
                     <tr key={p.id}>
@@ -531,6 +535,8 @@ function _NeonConfigModal({ onClose }) {
                         onChange={e=>updPerfil(i,'precioM',parseFloat(e.target.value)||0)} className="mono neon-num"/></td>
                       <td><input type="number" min="0" step="0.01" value={p.wattsM}
                         onChange={e=>updPerfil(i,'wattsM',parseFloat(e.target.value)||0)} className="mono neon-num"/></td>
+                      <td><input type="number" min="0" step="0.5" value={p.alturaMinCm||5}
+                        onChange={e=>updPerfil(i,'alturaMinCm',parseFloat(e.target.value)||5)} className="mono neon-num"/></td>
                       <td className="c"><input type="checkbox" checked={p.activo!==false}
                         onChange={e=>updPerfil(i,'activo',e.target.checked)}/></td>
                       <td><button className="neon-icon-btn" onClick={()=>rmPerfil(i)}><window.IconTrash size={13}/></button></td>
@@ -777,6 +783,17 @@ function ModuleAnunciosNeon({ addToTicket }) {
     }, 0) / 100;
   }, [elements, excluded, scaleEff]);
 
+  // Elementos del neón que quedan por debajo de la altura mínima del perfil elegido.
+  // Un elemento "chico" no se puede formar con la manguera (curva no cierra).
+  const alturaMinPerfilCm = perfil?.alturaMinCm || 5;
+  const elementosChicos = React.useMemo(() => {
+    if (!scaleEff || !neonBboxes.length) return [];
+    return neonBboxes
+      .filter(b => !excluded.includes(b.idx))
+      .map(b => ({ idx:b.idx, wCm: b.w * scaleEff, hCm: b.h * scaleEff }))
+      .filter(e => Math.min(e.wCm, e.hCm) < alturaMinPerfilCm);
+  }, [neonBboxes, excluded, scaleEff, alturaMinPerfilCm]);
+
   // Fuente: si 'auto', elige la más chica del catálogo (excluyendo pilas) que cubra los watts totales × factor de seguridad
   const wattsNeeded = Lm * (perfil?.wattsM || 0);
   const fuenteAuto = React.useMemo(() => {
@@ -954,6 +971,34 @@ function ModuleAnunciosNeon({ addToTicket }) {
               );
             })()}
           </div>
+
+          {svgFile && scaleEff > 0 && elementosChicos.length > 0 && (
+            <div className="neon-warn">
+              <div className="neon-warn-title">
+                <window.IconBolt size={14}/> Advertencia técnica
+              </div>
+              <div className="neon-warn-body">
+                <strong>{elementosChicos.length} elemento{elementosChicos.length!==1?'s':''}</strong> del
+                neón mide{elementosChicos.length===1?'':'n'} menos de <strong>{alturaMinPerfilCm} cm</strong> —
+                el mínimo del perfil <strong>{perfil?.nombre} {perfil?.color}</strong>.
+                <ul style={{margin:'4px 0 0 18px', padding:0}}>
+                  {elementosChicos.slice(0,5).map(e => (
+                    <li key={e.idx} className="mono" style={{fontSize:'0.72rem'}}>
+                      Elemento #{e.idx+1}: {e.wCm.toFixed(1)} × {e.hCm.toFixed(1)} cm
+                    </li>
+                  ))}
+                  {elementosChicos.length > 5 && (
+                    <li style={{fontSize:'0.72rem'}}>… y {elementosChicos.length-5} más</li>
+                  )}
+                </ul>
+                <div style={{marginTop:6, fontSize:'0.72rem'}}>
+                  Con esa medida la manguera no puede doblarse lo suficiente para formar la letra o figura.
+                  Opciones: <strong>subir el ancho</strong> del anuncio (Ajustar manualmente),
+                  o <strong>cambiar a un perfil más delgado</strong> (ej. Mini 6mm).
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="neon-panel">
             <h3 className="neon-panel-h">Base</h3>

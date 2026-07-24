@@ -299,21 +299,24 @@ if (BORDADO_PRECIOS.densTrazo === 50.71 && BORDADO_PRECIOS.densArea === 94.75 &&
 
 // Perfiles del neón (mini/estándar/premium × colores comunes).
 // precioM = precio del neón por metro; wattsM = consumo por metro (para dimensionar fuente)
+// alturaMinCm = altura mínima de letra/forma que se puede trazar con esa manguera
+//   (basado en el radio mínimo de curvatura: mini 6mm ≈ 5cm, std 12mm ≈ 10cm, premium 16mm ≈ 15cm).
+//   Debajo de eso, los dobleces se ven como manchas y no se forma la letra.
 const _NEON_PERFILES_DEFAULTS = [
-  { id:'mini-blanco',   nombre:'Neón Mini 6mm',      color:'Blanco cálido', precioM:180, wattsM:8,  activo:true },
-  { id:'mini-azul',     nombre:'Neón Mini 6mm',      color:'Azul',          precioM:200, wattsM:8,  activo:true },
-  { id:'mini-rojo',     nombre:'Neón Mini 6mm',      color:'Rojo',          precioM:200, wattsM:8,  activo:true },
-  { id:'mini-verde',    nombre:'Neón Mini 6mm',      color:'Verde',         precioM:200, wattsM:8,  activo:true },
-  { id:'std-blanco',    nombre:'Neón Estándar 12mm', color:'Blanco cálido', precioM:240, wattsM:12, activo:true },
-  { id:'std-blancof',   nombre:'Neón Estándar 12mm', color:'Blanco frío',   precioM:240, wattsM:12, activo:true },
-  { id:'std-azul',      nombre:'Neón Estándar 12mm', color:'Azul',          precioM:260, wattsM:12, activo:true },
-  { id:'std-rojo',      nombre:'Neón Estándar 12mm', color:'Rojo',          precioM:260, wattsM:12, activo:true },
-  { id:'std-rosa',      nombre:'Neón Estándar 12mm', color:'Rosa',          precioM:280, wattsM:12, activo:true },
-  { id:'std-amarillo',  nombre:'Neón Estándar 12mm', color:'Amarillo',      precioM:260, wattsM:12, activo:true },
-  { id:'std-verde',     nombre:'Neón Estándar 12mm', color:'Verde',         precioM:260, wattsM:12, activo:true },
-  { id:'std-rgb',       nombre:'Neón Estándar 12mm', color:'RGB',           precioM:420, wattsM:14, activo:true },
-  { id:'prem-blanco',   nombre:'Neón Premium 16mm',  color:'Blanco cálido', precioM:340, wattsM:16, activo:true },
-  { id:'prem-rgb',      nombre:'Neón Premium 16mm',  color:'RGB direccionable', precioM:580, wattsM:18, activo:true },
+  { id:'mini-blanco',   nombre:'Neón Mini 6mm',      color:'Blanco cálido', precioM:180, wattsM:8,  alturaMinCm:5,  activo:true },
+  { id:'mini-azul',     nombre:'Neón Mini 6mm',      color:'Azul',          precioM:200, wattsM:8,  alturaMinCm:5,  activo:true },
+  { id:'mini-rojo',     nombre:'Neón Mini 6mm',      color:'Rojo',          precioM:200, wattsM:8,  alturaMinCm:5,  activo:true },
+  { id:'mini-verde',    nombre:'Neón Mini 6mm',      color:'Verde',         precioM:200, wattsM:8,  alturaMinCm:5,  activo:true },
+  { id:'std-blanco',    nombre:'Neón Estándar 12mm', color:'Blanco cálido', precioM:240, wattsM:12, alturaMinCm:10, activo:true },
+  { id:'std-blancof',   nombre:'Neón Estándar 12mm', color:'Blanco frío',   precioM:240, wattsM:12, alturaMinCm:10, activo:true },
+  { id:'std-azul',      nombre:'Neón Estándar 12mm', color:'Azul',          precioM:260, wattsM:12, alturaMinCm:10, activo:true },
+  { id:'std-rojo',      nombre:'Neón Estándar 12mm', color:'Rojo',          precioM:260, wattsM:12, alturaMinCm:10, activo:true },
+  { id:'std-rosa',      nombre:'Neón Estándar 12mm', color:'Rosa',          precioM:280, wattsM:12, alturaMinCm:10, activo:true },
+  { id:'std-amarillo',  nombre:'Neón Estándar 12mm', color:'Amarillo',      precioM:260, wattsM:12, alturaMinCm:10, activo:true },
+  { id:'std-verde',     nombre:'Neón Estándar 12mm', color:'Verde',         precioM:260, wattsM:12, alturaMinCm:10, activo:true },
+  { id:'std-rgb',       nombre:'Neón Estándar 12mm', color:'RGB',           precioM:420, wattsM:14, alturaMinCm:10, activo:true },
+  { id:'prem-blanco',   nombre:'Neón Premium 16mm',  color:'Blanco cálido', precioM:340, wattsM:16, alturaMinCm:15, activo:true },
+  { id:'prem-rgb',      nombre:'Neón Premium 16mm',  color:'RGB direccionable', precioM:580, wattsM:18, alturaMinCm:15, activo:true },
 ];
 let NEON_PERFILES_RAW = storageLoad('sgi_neon_perfiles', _NEON_PERFILES_DEFAULTS);
 let NEON_PERFILES     = NEON_PERFILES_RAW.filter(p => p.activo !== false);
