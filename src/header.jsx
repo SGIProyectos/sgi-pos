@@ -31,8 +31,8 @@ function Header({ activeModule, onModuleChange, activeUser, onUserChange }) {
       <div className="brand">
         <div className="brand-mark">SGI</div>
         <div className="brand-text">
-          <div className="b1">SGI</div>
-          <div className="b2">Servicios Gráficos</div>
+          <div className="b1">SISTEMA INTEGRAL DE PRECIOS</div>
+          <div className="b2">SGI</div>
         </div>
       </div>
 
