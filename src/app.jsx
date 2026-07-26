@@ -308,7 +308,7 @@ function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [items.length, showPayment, crearPedido, alertPedidos]);
 
-  const isFullScreen = ['config', 'contabilidad', 'pedidos', 'cotizador'].includes(activeModule);
+  const isFullScreen = ['config', 'contabilidad', 'pedidos', 'cotizador', 'letras'].includes(activeModule);
 
   const ModuleComp = {
     copiado:          window.ModuleCopiado,
@@ -328,6 +328,7 @@ function App() {
               {activeModule === 'contabilidad'   && <window.ModuleContabilidad sales={sales} />}
               {activeModule === 'pedidos'        && <window.ModulePedidos />}
               {activeModule === 'cotizador'      && <window.ModuleCotizador />}
+              {activeModule === 'letras'         && <window.ModuleLetras />}
             </div>
           </div>
         ) : (

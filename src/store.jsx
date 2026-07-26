@@ -48,6 +48,7 @@ const MODULES = [
   { id: 'granformato',    name: 'Gran Formato',       short: 'Gran Formato', Icon: window.IconLayout,   hotkey: 'F2' },
   { id: 'bordado',        name: 'Bordado',            short: 'Bordado',      Icon: window.IconNeedle,   hotkey: 'F3' },
   { id: 'anuncios-neon', name: 'Anuncios Neón',      short: 'Neón',         Icon: window.IconBolt,     hotkey: 'F4' },
+  { id: 'letras',        name: 'Letras y Anuncios', short: 'Letras',       Icon: window.IconType,     hotkey: 'F5' },
   { id: 'pedidos',       name: 'Pedidos',            short: 'Pedidos',      Icon: window.IconNote,     hotkey: null, admin: true },
   { id: 'cotizador',    name: 'Cotizador Express',   short: 'Cotizador',    Icon: window.IconFileText, hotkey: null, admin: true },
   { id: 'contabilidad',  name: 'Contabilidad',       short: 'Conta',        Icon: window.IconReceipt,  hotkey: null, admin: true },
