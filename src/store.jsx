@@ -313,6 +313,7 @@ const _NEON_PERFILES_DEFAULTS = [
   { id:'std-azul',      nombre:'Neón Estándar 12mm', color:'Azul',          precioM:260, wattsM:12, alturaMinCm:10, activo:true },
   { id:'std-rojo',      nombre:'Neón Estándar 12mm', color:'Rojo',          precioM:260, wattsM:12, alturaMinCm:10, activo:true },
   { id:'std-rosa',      nombre:'Neón Estándar 12mm', color:'Rosa',          precioM:280, wattsM:12, alturaMinCm:10, activo:true },
+  { id:'std-morado',    nombre:'Neón Estándar 12mm', color:'Morado',        precioM:280, wattsM:12, alturaMinCm:10, activo:true },
   { id:'std-amarillo',  nombre:'Neón Estándar 12mm', color:'Amarillo',      precioM:260, wattsM:12, alturaMinCm:10, activo:true },
   { id:'std-verde',     nombre:'Neón Estándar 12mm', color:'Verde',         precioM:260, wattsM:12, alturaMinCm:10, activo:true },
   { id:'std-rgb',       nombre:'Neón Estándar 12mm', color:'RGB',           precioM:420, wattsM:14, alturaMinCm:10, activo:true },

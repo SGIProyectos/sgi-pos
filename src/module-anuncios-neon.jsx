@@ -255,8 +255,11 @@ function _colorPerfil(perfil) {
   if (c.includes('verde'))    return '#39ff14';
   if (c.includes('rosa'))     return '#ff36c7';
   if (c.includes('amarillo')) return '#ffe600';
+  if (c.includes('naranja'))  return '#ff8a00';
+  if (c.includes('morado') || c.includes('violeta') || c.includes('púrpura') || c.includes('purpura') || c.includes('purple'))
+                              return '#b026ff';
   if (c.includes('rgb'))      return '#c14bff';
-  return '#ff36c7';
+  return '#b026ff';
 }
 
 // ─── Upload ───────────────────────────────────────────────────────────────────
@@ -333,7 +336,7 @@ function _NeonSvgViewer({ svgHtml, color, onScan, excluded, onToggleEl, showTraz
     // Grosor de trazo relativo al tamaño del diseño para que se vea consistente
     const vb = (svg.getAttribute('viewBox') || '0 0 300 300').split(/[\s,]+/).map(parseFloat);
     const size   = Math.max(vb[2] || 300, vb[3] || 300);
-    const stroke = size * 0.009;  // tubo un poco más grueso — se ve como manguera
+    const stroke = size * 0.005;  // tubo delgado — la mayor parte del "grosor" visual viene del bloom
     // Núcleo del tubo: mezclamos el color con blanco para simular el vidrio iluminado
     const core = _neonLighten(color, 0.78);
     // Halos escalonados del color puro — los drop-shadow se acumulan y crean el bloom
