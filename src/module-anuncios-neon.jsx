@@ -337,15 +337,13 @@ function _NeonSvgViewer({ svgHtml, color, onScan, excluded, onToggleEl, showTraz
     const vb = (svg.getAttribute('viewBox') || '0 0 300 300').split(/[\s,]+/).map(parseFloat);
     const size   = Math.max(vb[2] || 300, vb[3] || 300);
     const stroke = size * 0.005;  // tubo delgado — la mayor parte del "grosor" visual viene del bloom
-    // Núcleo del tubo: mezclamos el color con blanco para simular el vidrio iluminado
-    const core = _neonLighten(color, 0.78);
-    // Halos escalonados del color puro — los drop-shadow se acumulan y crean el bloom
+    // Núcleo del tubo: apenas aclarado, conserva bien el color (evita que el bloom se sature a blanco)
+    const core = _neonLighten(color, 0.4);
+    // Halos escalonados del color puro — 3 capas de bloom (menos "reflejo")
     const glow = [
-      `drop-shadow(0 0 ${size*0.0025}px ${core})`,   // brillo íntimo del vidrio
-      `drop-shadow(0 0 ${size*0.006}px ${color})`,    // halo agudo
-      `drop-shadow(0 0 ${size*0.014}px ${color})`,    // halo cercano
-      `drop-shadow(0 0 ${size*0.028}px ${color})`,    // halo medio
-      `drop-shadow(0 0 ${size*0.055}px ${color})`,    // bloom exterior
+      `drop-shadow(0 0 ${size*0.005}px ${color})`,    // halo cercano
+      `drop-shadow(0 0 ${size*0.013}px ${color})`,    // halo medio
+      `drop-shadow(0 0 ${size*0.028}px ${color})`,    // bloom exterior tenue
     ].join(' ');
 
     wrap.querySelectorAll('[data-neon-idx]').forEach(el => {
