@@ -6,6 +6,32 @@
 //   store.jsx  ← catálogo (perfiles + params) + calcularNeon() (función pura)
 //   este file  ← solo UI
 
+// Aclara un color (hex #RRGGBB, #RGB o rgb(...)) mezclándolo con blanco.
+// amt=0 → mismo color; amt=1 → blanco puro. Se usa para el "núcleo" del tubo neón.
+function _neonLighten(input, amt) {
+  const t = Math.max(0, Math.min(1, amt));
+  let r = 255, g = 255, b = 255;
+  if (typeof input === 'string') {
+    const s = input.trim();
+    if (s.charAt(0) === '#') {
+      let h = s.slice(1);
+      if (h.length === 3) h = h.split('').map(c => c+c).join('');
+      if (h.length >= 6) {
+        r = parseInt(h.slice(0,2),16);
+        g = parseInt(h.slice(2,4),16);
+        b = parseInt(h.slice(4,6),16);
+      }
+    } else {
+      const m = s.match(/rgba?\s*\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/i);
+      if (m) { r = +m[1]; g = +m[2]; b = +m[3]; }
+    }
+  }
+  const lr = Math.round(r + (255 - r) * t);
+  const lg = Math.round(g + (255 - g) * t);
+  const lb = Math.round(b + (255 - b) * t);
+  return `rgb(${lr},${lg},${lb})`;
+}
+
 // Elementos SVG medibles
 const _NEON_MEASURABLE = ['path','line','polyline','polygon','circle','ellipse','rect'];
 
@@ -307,8 +333,17 @@ function _NeonSvgViewer({ svgHtml, color, onScan, excluded, onToggleEl, showTraz
     // Grosor de trazo relativo al tamaño del diseño para que se vea consistente
     const vb = (svg.getAttribute('viewBox') || '0 0 300 300').split(/[\s,]+/).map(parseFloat);
     const size   = Math.max(vb[2] || 300, vb[3] || 300);
-    const stroke = size * 0.006;  // ≈ 0.6% del ancho del canvas
-    const glow   = `drop-shadow(0 0 3px ${color}) drop-shadow(0 0 7px ${color}) drop-shadow(0 0 14px ${color})`;
+    const stroke = size * 0.009;  // tubo un poco más grueso — se ve como manguera
+    // Núcleo del tubo: mezclamos el color con blanco para simular el vidrio iluminado
+    const core = _neonLighten(color, 0.78);
+    // Halos escalonados del color puro — los drop-shadow se acumulan y crean el bloom
+    const glow = [
+      `drop-shadow(0 0 ${size*0.0025}px ${core})`,   // brillo íntimo del vidrio
+      `drop-shadow(0 0 ${size*0.006}px ${color})`,    // halo agudo
+      `drop-shadow(0 0 ${size*0.014}px ${color})`,    // halo cercano
+      `drop-shadow(0 0 ${size*0.028}px ${color})`,    // halo medio
+      `drop-shadow(0 0 ${size*0.055}px ${color})`,    // bloom exterior
+    ].join(' ');
 
     wrap.querySelectorAll('[data-neon-idx]').forEach(el => {
       const idx  = parseInt(el.getAttribute('data-neon-idx'), 10);
@@ -332,9 +367,9 @@ function _NeonSvgViewer({ svgHtml, color, onScan, excluded, onToggleEl, showTraz
         el.style.filter = 'none';
         el.style.opacity = '1';
       } else {
-        // Neón: stroke del color con glow
-        el.style.fill = 'rgba(255,255,255,0.06)';
-        el.style.stroke = color;
+        // Neón: núcleo casi blanco (vidrio iluminado) + halos del color puro
+        el.style.fill = 'rgba(255,255,255,0.04)';
+        el.style.stroke = core;
         el.style.strokeWidth = String(stroke);
         el.style.strokeLinejoin = 'round';
         el.style.strokeLinecap  = 'round';

@@ -326,6 +326,7 @@ let NEON_PERFILES     = NEON_PERFILES_RAW.filter(p => p.activo !== false);
 //   silMlPorM  ml de silicón consumidos por metro de trazo
 //   silPrecio  MXN por ml de silicón
 //   cableM     MXN por metro de cable acoplado al neón
+//              (ref: Cable Estaño Estañado Cal.22 Radox 080-4, rollo 100 m ≈ $250 → $2.50/m)
 //   costoUnion MXN por unión/soldadura
 //   fuenteW    watts de la fuente estándar (para dimensionar)
 //   fuentePrecio MXN por fuente
@@ -337,7 +338,7 @@ let NEON_PERFILES     = NEON_PERFILES_RAW.filter(p => p.activo !== false);
 //   margen     fracción sobre costo directo (0.35 = 35%)
 //   urgencias  lista de niveles con multiplicador final
 const _NEON_PARAMS_DEFAULTS = {
-  cableM:        18,      // MXN por metro de cable
+  cableM:        2.5,     // MXN por metro de cable (Radox 080-4 Cal.22, rollo 100 m ≈ $250)
   accesM:        35,      // MXN por metro de accesorios (grapas, tornillos, conectores)
   consumiblesPct: 0.08,   // 8% sobre materiales: cianoacrilato + soldadura + varios
   fuenteFactor:  0.80,    // factor de seguridad (usar 80% de capacidad de la fuente)
