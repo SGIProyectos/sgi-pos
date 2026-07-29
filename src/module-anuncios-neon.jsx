@@ -871,6 +871,223 @@ function _NeonProyectosModal({ mode, currentSnapshot, onClose, onLoad }) {
   );
 }
 
+// ─── Simulador en fachada (foto del muro + neón overlay draggable) ───────────
+function _NeonFachadaModal({ svgHtml, color, excluded, onClose }) {
+  const [foto,       setFoto]       = React.useState(null);  // { url, w, h }
+  const [pos,        setPos]        = React.useState({ x: 40, y: 40 });
+  const [escala,     setEscala]     = React.useState(0.6);
+  const [rotacion,   setRotacion]   = React.useState(0);
+  const [opacidad,   setOpacidad]   = React.useState(1);
+  const [tamNeon,    setTamNeon]    = React.useState({ w: 320, h: 180 });
+  const [descargando,setDescargando]= React.useState(false);
+  const dragRef  = React.useRef(null);
+  const stageRef = React.useRef(null);
+  const neonRef  = React.useRef(null);
+
+  const cargarFoto = (f) => {
+    if (!f || !f.type.startsWith('image/')) { alert('Sube una imagen (JPG, PNG).'); return; }
+    const rd = new FileReader();
+    rd.onload = () => {
+      const img = new Image();
+      img.onload = () => setFoto({ url: rd.result, w: img.naturalWidth, h: img.naturalHeight });
+      img.src = rd.result;
+    };
+    rd.readAsDataURL(f);
+  };
+
+  // Cuando cambia el SVG, medir su tamaño natural (viewBox)
+  React.useEffect(() => {
+    if (!neonRef.current) return;
+    const svg = neonRef.current.querySelector('svg');
+    if (!svg) return;
+    const vb = (svg.getAttribute('viewBox') || '0 0 300 300').split(/[\s,]+/).map(parseFloat);
+    setTamNeon({ w: vb[2] || 300, h: vb[3] || 300 });
+  }, [svgHtml]);
+
+  // Drag
+  const onMouseDown = (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startY: e.clientY, ox: pos.x, oy: pos.y };
+  };
+  React.useEffect(() => {
+    const onMove = (e) => {
+      if (!dragRef.current) return;
+      const dx = e.clientX - dragRef.current.startX;
+      const dy = e.clientY - dragRef.current.startY;
+      setPos({ x: dragRef.current.ox + dx, y: dragRef.current.oy + dy });
+    };
+    const onUp = () => { dragRef.current = null; };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  // ESC para cerrar
+  React.useEffect(() => {
+    const onEsc = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [onClose]);
+
+  // Descargar PNG compuesto: foto de fondo + SVG del neón encima con transform
+  const descargar = async () => {
+    if (!foto || !stageRef.current || !neonRef.current) return;
+    setDescargando(true);
+    try {
+      const stage = stageRef.current;
+      const stageRect = stage.getBoundingClientRect();
+      const scaleFotoStage = foto.w / stageRect.width;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = foto.w;
+      canvas.height = foto.h;
+      const ctx = canvas.getContext('2d');
+
+      // Fondo
+      const bgImg = new Image();
+      await new Promise((res, rej) => { bgImg.onload = res; bgImg.onerror = rej; bgImg.src = foto.url; });
+      ctx.drawImage(bgImg, 0, 0, foto.w, foto.h);
+
+      // Serializar el SVG (con estilos inline ya aplicados por el viewer)
+      const svgEl = neonRef.current.querySelector('svg');
+      if (!svgEl) throw new Error('SVG no encontrado');
+      const clone = svgEl.cloneNode(true);
+      const vb = (svgEl.getAttribute('viewBox') || `0 0 ${tamNeon.w} ${tamNeon.h}`).split(/[\s,]+/).map(parseFloat);
+      // Añadir padding al viewBox para no cortar el bloom
+      const pad = Math.max(vb[2], vb[3]) * 0.15;
+      clone.setAttribute('viewBox', `${vb[0]-pad} ${vb[1]-pad} ${vb[2]+pad*2} ${vb[3]+pad*2}`);
+      clone.setAttribute('width', String(vb[2]+pad*2));
+      clone.setAttribute('height', String(vb[3]+pad*2));
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      const svgStr = new XMLSerializer().serializeToString(clone);
+      const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+      const svgImg = new Image();
+      await new Promise((res, rej) => { svgImg.onload = res; svgImg.onerror = rej; svgImg.src = svgUrl; });
+
+      // Tamaño del neón en la foto (escalado desde stage → foto)
+      const neonWStage = tamNeon.w * escala;
+      const neonHStage = tamNeon.h * escala;
+      const wF = neonWStage * scaleFotoStage;
+      const hF = neonHStage * scaleFotoStage;
+      const padF = wF * 0.15;  // mismo padding proporcional
+      const centroX = (pos.x + neonWStage / 2) * scaleFotoStage;
+      const centroY = (pos.y + neonHStage / 2) * scaleFotoStage;
+
+      ctx.save();
+      ctx.globalAlpha = opacidad;
+      ctx.translate(centroX, centroY);
+      ctx.rotate((rotacion * Math.PI) / 180);
+      ctx.drawImage(svgImg, -(wF + padF*2) / 2, -(hF + padF*2) / 2, wF + padF*2, hF + padF*2);
+      ctx.restore();
+
+      URL.revokeObjectURL(svgUrl);
+
+      const link = document.createElement('a');
+      link.download = `neon-en-fachada-${Date.now()}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (err) {
+      alert('No se pudo generar la imagen: ' + err.message);
+    } finally {
+      setDescargando(false);
+    }
+  };
+
+  return (
+    <div className="neon-fach-overlay">
+      <div className="neon-fach-head">
+        <div>
+          <div style={{fontWeight:700, fontSize:'1rem'}}>Simulador en fachada</div>
+          <div style={{fontSize:'0.75rem', opacity:0.6}}>Sube la foto del muro y arrastra el neón para posicionarlo</div>
+        </div>
+        <div style={{display:'flex', gap:8}}>
+          <button className="neon-btn-ghost neon-btn-small" onClick={descargar} disabled={!foto || descargando}>
+            <window.IconUpload size={13} style={{transform:'rotate(180deg)'}}/> {descargando ? 'Generando…' : 'Descargar PNG'}
+          </button>
+          <button className="neon-fach-close" onClick={onClose} title="Cerrar (ESC)">
+            <window.IconX size={18}/>
+          </button>
+        </div>
+      </div>
+
+      <div className="neon-fach-body">
+        <div className="neon-fach-stage-wrap">
+          {!foto ? (
+            <label className="neon-fach-empty">
+              <input type="file" accept="image/*" style={{display:'none'}}
+                onChange={(e)=>cargarFoto(e.target.files?.[0])}/>
+              <window.IconImage size={48} stroke={1.2}/>
+              <div style={{marginTop:8, fontSize:'0.9rem'}}>Click para subir foto del muro</div>
+              <div style={{marginTop:4, fontSize:'0.75rem', opacity:0.6}}>JPG, PNG</div>
+            </label>
+          ) : (
+            <div className="neon-fach-stage" ref={stageRef}
+              style={{backgroundImage:`url(${foto.url})`, aspectRatio:`${foto.w}/${foto.h}`}}>
+              <div ref={neonRef}
+                className="neon-fach-overlay-neon"
+                style={{
+                  left: pos.x, top: pos.y,
+                  width: tamNeon.w * escala, height: tamNeon.h * escala,
+                  transform: `rotate(${rotacion}deg)`,
+                  opacity: opacidad,
+                  cursor: dragRef.current ? 'grabbing' : 'grab',
+                }}
+                onMouseDown={onMouseDown}
+              >
+                <_NeonSvgViewer
+                  svgHtml={svgHtml} color={color}
+                  excluded={excluded} onToggleEl={()=>{}}
+                  onScan={()=>{}} showTrazos={false}
+                  encendido={true}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="neon-fach-controls">
+          <div className="field">
+            <label>Foto del muro</label>
+            <label className="neon-btn-ghost neon-btn-small" style={{cursor:'pointer', textAlign:'center'}}>
+              <input type="file" accept="image/*" style={{display:'none'}}
+                onChange={(e)=>cargarFoto(e.target.files?.[0])}/>
+              {foto ? 'Cambiar foto' : 'Subir foto'}
+            </label>
+          </div>
+
+          <div className="field">
+            <label>Tamaño ({Math.round(escala*100)}%)</label>
+            <input type="range" min="10" max="200" step="1" value={escala*100}
+              onChange={e=>setEscala(parseFloat(e.target.value)/100)}/>
+          </div>
+
+          <div className="field">
+            <label>Rotación ({rotacion}°)</label>
+            <input type="range" min="-45" max="45" step="1" value={rotacion}
+              onChange={e=>setRotacion(parseFloat(e.target.value))}/>
+          </div>
+
+          <div className="field">
+            <label>Intensidad ({Math.round(opacidad*100)}%)</label>
+            <input type="range" min="20" max="100" step="1" value={opacidad*100}
+              onChange={e=>setOpacidad(parseFloat(e.target.value)/100)}/>
+          </div>
+
+          <div className="neon-hint">
+            <strong>Tip:</strong> arrastra el neón sobre la foto con el mouse.
+            Ajusta el tamaño y la rotación con los sliders. Descarga el PNG para enviárselo al cliente.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Componente raíz del módulo (servicio, panel único) ──────────────────────
 function ModuleAnunciosNeon({ addToTicket }) {
   const [svgFile,   setSvgFile]   = React.useState(null);
@@ -885,6 +1102,9 @@ function ModuleAnunciosNeon({ addToTicket }) {
   const [encendido, setEncendido] = React.useState(true);
   const [presentando, setPresentando] = React.useState(false);
   const [proyectoModal, setProyectoModal] = React.useState(null);  // null | 'guardar' | 'abrir'
+  const [cliente, setCliente] = React.useState('');
+  const [nombreProyecto, setNombreProyecto] = React.useState('');
+  const [fachadaOpen, setFachadaOpen] = React.useState(false);
   const [perfilId,  setPerfilId]  = React.useState(window.NEON_PERFILES[0]?.id || '');
   const [fuenteId,  setFuenteId]  = React.useState('auto');  // 'auto' = elegir por watts, o id específico
   const [urgId,     setUrgId]     = React.useState(window.NEON_PARAMS.urgencias[0]?.id || 'normal');
@@ -1036,6 +1256,7 @@ function ModuleAnunciosNeon({ addToTicket }) {
     incSoporte, cobrarDesperdicio, piezaCostoManual,
     corteExtra, consumiblesPct, manoObraManual,
     uniones, unionesTocado,
+    cliente, nombre: nombreProyecto,
   });
 
   // Restaurar todos los estados desde un proyecto guardado
@@ -1056,6 +1277,14 @@ function ModuleAnunciosNeon({ addToTicket }) {
     setManoObraManual(p.manoObraManual ?? '');
     setUniones(Number(p.uniones) || 0);
     setUnionesTocado(!!p.unionesTocado);
+    setCliente(p.cliente || '');
+    setNombreProyecto(p.nombre || '');
+  };
+
+  // Imprimir cotización — llama a printSgiDoc con el div oculto de la cotización
+  const imprimirCotizacion = () => {
+    if (Lm <= 0) { alert('Sube el diseño y captura el ancho para poder imprimir.'); return; }
+    window.printSgiDoc('.neon-print-doc');
   };
 
   const agregarTicket = () => {
@@ -1126,6 +1355,11 @@ function ModuleAnunciosNeon({ addToTicket }) {
                     title="Mostrar al cliente en pantalla completa">
                     <window.IconMaximize size={12}/> Presentar
                   </button>
+                  <button className="neon-btn-ghost neon-btn-small"
+                    onClick={()=>setFachadaOpen(true)}
+                    title="Montar el neón sobre una foto de la fachada">
+                    <window.IconImage size={12}/> En fachada
+                  </button>
                   <button className={'neon-btn-ghost neon-btn-small'+(showTrazos?' active':'')}
                     onClick={()=>setShowTrazos(!showTrazos)}>
                     <window.IconEdit size={12}/> {showTrazos ? 'Listo' : 'Excluir trazos'}
@@ -1152,6 +1386,13 @@ function ModuleAnunciosNeon({ addToTicket }) {
         <div className="neon-svc-right">
           <div className="neon-panel">
             <h3 className="neon-panel-h">Dimensiones</h3>
+            <div className="neon-dim-field" style={{marginBottom:10}}>
+              <label>Cliente (opcional)</label>
+              <div className="neon-dim-input">
+                <input value={cliente} onChange={e=>setCliente(e.target.value)}
+                  placeholder="Nombre del cliente" style={{flex:1}}/>
+              </div>
+            </div>
             {!svgFile ? (
               <div className="neon-readout-src">Sube un diseño para ver medidas detectadas.</div>
             ) : (() => {
@@ -1454,6 +1695,10 @@ function ModuleAnunciosNeon({ addToTicket }) {
             <button className="neon-btn-add" onClick={agregarTicket} disabled={Lm <= 0}>
               <window.IconPlus size={16}/> Agregar al ticket
             </button>
+            <button className="neon-btn-ghost" onClick={imprimirCotizacion} disabled={Lm <= 0}
+              style={{marginTop:6, width:'100%'}}>
+              <window.IconPrint size={14}/> Imprimir cotización
+            </button>
           </div>
         </div>
       </div>
@@ -1466,6 +1711,109 @@ function ModuleAnunciosNeon({ addToTicket }) {
           currentSnapshot={snapshotProyecto()}
           onClose={()=>setProyectoModal(null)}
           onLoad={cargarProyecto}
+        />
+      )}
+
+      {/* Documento imprimible de cotización (oculto en pantalla, se muestra dentro del iframe de printSgiDoc) */}
+      {svgFile && Lm > 0 && (
+        <div className="cq-print-doc neon-print-doc" style={{display:'none'}}>
+          <div className="np-head">
+            <div className="np-negocio">
+              <div className="np-neg-name">{window.NEGOCIO?.nombre || 'SGI'}</div>
+              <div className="np-neg-line">{window.NEGOCIO?.direccion}, {window.NEGOCIO?.colonia}</div>
+              <div className="np-neg-line">{window.NEGOCIO?.ciudad}, {window.NEGOCIO?.estado} {window.NEGOCIO?.cp}</div>
+              <div className="np-neg-line">RFC {window.NEGOCIO?.rfc} · Tel {window.NEGOCIO?.telefono}</div>
+              {window.NEGOCIO?.email && <div className="np-neg-line">{window.NEGOCIO.email}</div>}
+            </div>
+            <div className="np-doc-info">
+              <div className="np-doc-title">COTIZACIÓN</div>
+              <div className="np-doc-sub">Anuncio en Neón LED</div>
+              <div className="np-doc-line">Fecha: {new Date().toLocaleDateString('es-MX', {day:'2-digit', month:'long', year:'numeric'})}</div>
+              <div className="np-doc-line">Vigencia: 15 días</div>
+            </div>
+          </div>
+
+          {(cliente || nombreProyecto) && (
+            <div className="np-cliente">
+              {cliente && <div><strong>Cliente:</strong> {cliente}</div>}
+              {nombreProyecto && <div><strong>Proyecto:</strong> {nombreProyecto}</div>}
+            </div>
+          )}
+
+          <div className="np-preview-box">
+            <div className="np-preview">
+              <_NeonSvgViewer
+                svgHtml={svgFile.html} color={color}
+                excluded={excluded} onToggleEl={()=>{}}
+                onScan={()=>{}} showTrazos={false}
+                encendido={true}
+              />
+            </div>
+            <div className="np-detalle">
+              <div className="np-det-row"><span>Dimensiones</span><strong>{anchoCm} × {altoCm} cm</strong></div>
+              <div className="np-det-row"><span>Perfil de neón</span><strong>{perfil?.nombre} · {perfil?.color}</strong></div>
+              <div className="np-det-row"><span>Longitud de neón</span><strong>{result.Lm.toFixed(2)} m</strong></div>
+              <div className="np-det-row"><span>Uniones/empalmes</span><strong>{result.uniones}</strong></div>
+              <div className="np-det-row"><span>Base</span><strong>{baseMat.nombre} ({baseForma.nombre})</strong></div>
+              <div className="np-det-row"><span>Fuente de poder</span><strong>{result.numFuentes} × {result.fuenteNombre}</strong></div>
+              <div className="np-det-row"><span>Watts totales</span><strong>{result.wattsTotal.toFixed(1)} W</strong></div>
+              <div className="np-det-row"><span>Tiempo de entrega</span><strong>{urgencia?.dias}</strong></div>
+            </div>
+          </div>
+
+          <table className="np-partidas">
+            <thead>
+              <tr>
+                <th style={{textAlign:'left'}}>Concepto</th>
+                <th style={{textAlign:'right'}}>Cantidad</th>
+                <th style={{textAlign:'right'}}>Unitario</th>
+                <th style={{textAlign:'right'}}>Importe</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.insumos.map((r,i) => (
+                <tr key={i}>
+                  <td>{r.concepto}</td>
+                  <td style={{textAlign:'right'}} className="mono">{r.cantidad.toFixed(2)} {r.unidad}</td>
+                  <td style={{textAlign:'right'}} className="mono">{window.fmt(r.unit)}</td>
+                  <td style={{textAlign:'right'}} className="mono">{window.fmt(r.importe)}</td>
+                </tr>
+              ))}
+              <tr>
+                <td>Mano de obra ({result.horas.toFixed(1)} h)</td>
+                <td></td>
+                <td></td>
+                <td style={{textAlign:'right'}} className="mono">{window.fmt(result.manoObra)}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr className="np-sub">
+                <td colSpan="3" style={{textAlign:'right'}}>Subtotal</td>
+                <td style={{textAlign:'right'}} className="mono">{window.fmt(result.precio)}</td>
+              </tr>
+              <tr>
+                <td colSpan="3" style={{textAlign:'right'}}>IVA 16%</td>
+                <td style={{textAlign:'right'}} className="mono">{window.fmt(result.iva)}</td>
+              </tr>
+              <tr className="np-total">
+                <td colSpan="3" style={{textAlign:'right'}}>TOTAL</td>
+                <td style={{textAlign:'right'}} className="mono">{window.fmt(result.precioIva)}</td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <div className="np-notas">
+            <strong>Notas:</strong> Precios en MXN. Cotización válida por 15 días.
+            Tiempo de entrega sujeto a confirmación al recibir anticipo del 50%.
+            Instalación en sitio se cotiza por separado según ubicación.
+          </div>
+        </div>
+      )}
+
+      {fachadaOpen && svgFile && (
+        <_NeonFachadaModal
+          svgHtml={svgFile.html} color={color} excluded={excluded}
+          onClose={()=>setFachadaOpen(false)}
         />
       )}
 
