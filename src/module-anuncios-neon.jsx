@@ -294,7 +294,7 @@ function _NeonUpload({ onSvg }) {
 }
 
 // ─── Visor con neón como STROKE (línea del color siguiendo contorno) ─────────
-function _NeonSvgViewer({ svgHtml, color, onScan, excluded, onToggleEl, showTrazos, encendido = true }) {
+function _NeonSvgViewer({ svgHtml, color, colorFor, onScan, excluded, onToggleEl, showTrazos, encendido = true, trazoActivo = null, coloreando = false }) {
   const wrapRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -337,19 +337,19 @@ function _NeonSvgViewer({ svgHtml, color, onScan, excluded, onToggleEl, showTraz
     const vb = (svg.getAttribute('viewBox') || '0 0 300 300').split(/[\s,]+/).map(parseFloat);
     const size   = Math.max(vb[2] || 300, vb[3] || 300);
     const stroke = size * 0.005;  // tubo delgado — la mayor parte del "grosor" visual viene del bloom
-    // Núcleo del tubo: apenas aclarado, conserva bien el color (evita que el bloom se sature a blanco)
-    const core = _neonLighten(color, 0.4);
-    // Halos escalonados del color puro — 3 capas de bloom (menos "reflejo")
-    const glow = [
-      `drop-shadow(0 0 ${size*0.005}px ${color})`,    // halo cercano
-      `drop-shadow(0 0 ${size*0.013}px ${color})`,    // halo medio
-      `drop-shadow(0 0 ${size*0.028}px ${color})`,    // bloom exterior tenue
+    const glowFor = (c) => [
+      `drop-shadow(0 0 ${size*0.005}px ${c})`,
+      `drop-shadow(0 0 ${size*0.013}px ${c})`,
+      `drop-shadow(0 0 ${size*0.028}px ${c})`,
     ].join(' ');
 
     wrap.querySelectorAll('[data-neon-idx]').forEach(el => {
       const idx  = parseInt(el.getAttribute('data-neon-idx'), 10);
       const role = el.getAttribute('data-neon-role') || 'neon';
       const isOut = excluded.includes(idx);
+      const isActivo = trazoActivo === idx;
+      const cThis = colorFor ? colorFor(idx) : color;
+      const coreThis = _neonLighten(cThis, 0.4);
       el.style.cursor = 'pointer';
       el.style.transition = 'opacity .15s, stroke .15s, filter .15s';
       if (isOut) {
@@ -377,26 +377,29 @@ function _NeonSvgViewer({ svgHtml, color, onScan, excluded, onToggleEl, showTraz
         el.style.filter = 'none';
         el.style.opacity = '1';
       } else {
-        // Neón encendido: núcleo casi blanco (vidrio iluminado) + halos del color puro
+        // Neón encendido: núcleo casi blanco (vidrio iluminado) + halos del color del trazo
         el.style.fill = 'rgba(255,255,255,0.04)';
-        el.style.stroke = core;
-        el.style.strokeWidth = String(stroke);
+        el.style.stroke = coreThis;
+        el.style.strokeWidth = String(isActivo ? stroke * 1.6 : stroke);
         el.style.strokeLinejoin = 'round';
         el.style.strokeLinecap  = 'round';
-        el.style.filter = glow;
+        // Si el trazo está seleccionado (modo colorear), agregar un halo blanco extra pulsante
+        el.style.filter = isActivo
+          ? `drop-shadow(0 0 ${size*0.008}px #fff) drop-shadow(0 0 ${size*0.02}px #fff) ${glowFor(cThis)}`
+          : glowFor(cThis);
         el.style.opacity = '1';
       }
     });
-  }, [svgHtml, color, excluded, encendido]);
+  }, [svgHtml, color, colorFor, excluded, encendido, trazoActivo]);
 
   const onClick = (e) => {
-    if (!showTrazos) return;
+    if (!showTrazos && !coloreando) return;
     const idx = e.target.getAttribute && e.target.getAttribute('data-neon-idx');
     if (idx != null) onToggleEl(parseInt(idx, 10));
   };
 
   return (
-    <div className={'neon-canvas'+(showTrazos?' adjusting':'')} onClick={onClick} ref={wrapRef}>
+    <div className={'neon-canvas'+(showTrazos?' adjusting':'')+(coloreando?' coloreando':'')} onClick={onClick} ref={wrapRef}>
       {!svgHtml && (
         <div className="neon-canvas-empty">
           <window.IconBolt size={48} stroke={1.2}/>
@@ -872,7 +875,7 @@ function _NeonProyectosModal({ mode, currentSnapshot, onClose, onLoad }) {
 }
 
 // ─── Simulador en fachada (foto del muro + neón overlay draggable) ───────────
-function _NeonFachadaModal({ svgHtml, color, excluded, onClose }) {
+function _NeonFachadaModal({ svgHtml, color, colorFor, excluded, onClose }) {
   const [foto,       setFoto]       = React.useState(null);  // { url, w, h }
   const [pos,        setPos]        = React.useState({ x: 40, y: 40 });
   const [escala,     setEscala]     = React.useState(0.6);
@@ -1041,6 +1044,7 @@ function _NeonFachadaModal({ svgHtml, color, excluded, onClose }) {
               >
                 <_NeonSvgViewer
                   svgHtml={svgHtml} color={color}
+                  colorFor={colorFor}
                   excluded={excluded} onToggleEl={()=>{}}
                   onScan={()=>{}} showTrazos={false}
                   encendido={true}
@@ -1105,6 +1109,9 @@ function ModuleAnunciosNeon({ addToTicket }) {
   const [cliente, setCliente] = React.useState('');
   const [nombreProyecto, setNombreProyecto] = React.useState('');
   const [fachadaOpen, setFachadaOpen] = React.useState(false);
+  const [trazoPerfiles, setTrazoPerfiles] = React.useState({});  // { idx: perfilId }
+  const [trazoActivo,   setTrazoActivo]   = React.useState(null); // idx del trazo seleccionado para colorear
+  const [showColorear,  setShowColorear]  = React.useState(false);
   const [perfilId,  setPerfilId]  = React.useState(window.NEON_PERFILES[0]?.id || '');
   const [fuenteId,  setFuenteId]  = React.useState('auto');  // 'auto' = elegir por watts, o id específico
   const [urgId,     setUrgId]     = React.useState(window.NEON_PARAMS.urgencias[0]?.id || 'normal');
@@ -1209,10 +1216,34 @@ function ModuleAnunciosNeon({ addToTicket }) {
     ? (fuenteAuto || fuentesAll[0] || { nombre:'—', watts:100, precio:0 })
     : (fuentesAll.find(f => f.id === fuenteId) || fuenteAuto || fuentesAll[0] || { nombre:'—', watts:100, precio:0 });
 
+  // Perfil asignado a cada trazo (override o perfil global)
+  const perfilDeTrazo = (idx) => {
+    const pid = trazoPerfiles[idx];
+    if (pid) return window.NEON_PERFILES.find(p => p.id === pid) || perfil;
+    return perfil;
+  };
+  // Color del trazo (para pintar en el viewer)
+  const colorDeTrazo = (idx) => _colorPerfil(perfilDeTrazo(idx));
+
+  // Tramos = agrupación de longitud por perfil, para cotizar con múltiples colores/mangueras
+  const tramos = React.useMemo(() => {
+    if (!scaleEff) return [];
+    const map = new Map();
+    for (const e of elements) {
+      if (e.role === 'base' || excluded.includes(e.idx)) continue;
+      const pf = perfilDeTrazo(e.idx);
+      const key = pf?.id || '_';
+      const lm = (e.raw * scaleEff) / 100;
+      if (!map.has(key)) map.set(key, { perfil: pf, Lm: 0 });
+      map.get(key).Lm += lm;
+    }
+    return Array.from(map.values());
+  }, [elements, excluded, scaleEff, trazoPerfiles, perfilId]);
+
   // Los params se pasan con el % de consumibles override (por si se ajustó para esta cotización)
   const paramsRun = { ...params, consumiblesPct: Math.max(0, consumiblesPct) / 100 };
   const result = window.calcularNeon({
-    Lm, uniones, perfil, fuente,
+    Lm, uniones, perfil, tramos, fuente,
     dimensiones: { anchoCm, altoCm },
     base: {
       material: baseMat, forma: baseForma, incluirSoporte: incSoporte,
@@ -1233,12 +1264,34 @@ function ModuleAnunciosNeon({ addToTicket }) {
     setExcluded([]);
     setUnionesTocado(false);
     setAnchoCm(0);
+    setTrazoPerfiles({}); setTrazoActivo(null);
   };
-  const onToggleEl = (idx) => setExcluded(x => x.includes(idx) ? x.filter(i => i !== idx) : [...x, idx]);
+  const onClickTrazo = (idx) => {
+    if (showColorear) {
+      setTrazoActivo(prev => (prev === idx ? null : idx));
+      return;
+    }
+    if (showTrazos) {
+      setExcluded(x => x.includes(idx) ? x.filter(i => i !== idx) : [...x, idx]);
+    }
+  };
+
+  // Asignar un perfil al trazo seleccionado (o quitar el override → vuelve al global)
+  const asignarPerfilATrazoActivo = (pid) => {
+    if (trazoActivo == null) return;
+    setTrazoPerfiles(prev => {
+      const next = { ...prev };
+      if (!pid || pid === perfilId) delete next[trazoActivo];
+      else next[trazoActivo] = pid;
+      return next;
+    });
+    setTrazoActivo(null);
+  };
 
   const resetSvg = () => {
     setSvgFile(null); setElements([]); setBboxes([]); setExcluded([]); setAnchoCm(0);
     setUnionesTocado(false);
+    setTrazoPerfiles({}); setTrazoActivo(null); setShowColorear(false);
   };
 
   // ESC para salir del modo presentación
@@ -1256,6 +1309,7 @@ function ModuleAnunciosNeon({ addToTicket }) {
     incSoporte, cobrarDesperdicio, piezaCostoManual,
     corteExtra, consumiblesPct, manoObraManual,
     uniones, unionesTocado,
+    trazoPerfiles,
     cliente, nombre: nombreProyecto,
   });
 
@@ -1277,6 +1331,7 @@ function ModuleAnunciosNeon({ addToTicket }) {
     setManoObraManual(p.manoObraManual ?? '');
     setUniones(Number(p.uniones) || 0);
     setUnionesTocado(!!p.unionesTocado);
+    setTrazoPerfiles(p.trazoPerfiles && typeof p.trazoPerfiles === 'object' ? p.trazoPerfiles : {});
     setCliente(p.cliente || '');
     setNombreProyecto(p.nombre || '');
   };
@@ -1289,15 +1344,23 @@ function ModuleAnunciosNeon({ addToTicket }) {
 
   const agregarTicket = () => {
     if (Lm <= 0) { alert('Sube el diseño y captura el ancho del anuncio para poder cotizar.'); return; }
+    const multiColor = tramos.length > 1;
+    const descColor = multiColor
+      ? `${tramos.length} colores`
+      : `${perfil.nombre} ${perfil.color}`;
+    const desgloseTramos = multiColor
+      ? tramos.map(t => `${t.perfil.color} ${t.Lm.toFixed(2)}m`).join(' · ')
+      : null;
     const item = {
       id:        window.uid(),
-      name:      `Anuncio neón ${anchoCm}×${altoCm} cm · ${perfil.nombre} ${perfil.color}`,
+      name:      `Anuncio neón ${anchoCm}×${altoCm} cm · ${descColor}`,
       qty:       1,
       unitPrice: result.precio,
       module:    'neon',
       iconKey:   'zap',
       meta: [
         `${result.Lm.toFixed(2)} m de neón · ${result.uniones} uniones`,
+        ...(desgloseTramos ? [desgloseTramos] : []),
         `Base: ${baseMat.nombre} (${baseForma.nombre}) · ${result.areaM2.toFixed(2)} m²`,
         `${result.numFuentes} × ${result.fuenteNombre}`,
         `Urgencia: ${urgencia.nombre} (${urgencia.dias})`,
@@ -1307,6 +1370,7 @@ function ModuleAnunciosNeon({ addToTicket }) {
     // Reset básico para siguiente cotización (dejar el catálogo elegido)
     setSvgFile(null); setElements([]); setBboxes([]); setExcluded([]);
     setAnchoCm(0); setUniones(0); setUnionesTocado(false); setCorteExtra(0);
+    setTrazoPerfiles({}); setTrazoActivo(null); setShowColorear(false);
     setConsumiblesPct(Math.round((window.NEON_PARAMS.consumiblesPct || 0.08) * 100));
     setManoObraManual('');
     setPiezaCostoManual('');
@@ -1360,8 +1424,13 @@ function ModuleAnunciosNeon({ addToTicket }) {
                     title="Montar el neón sobre una foto de la fachada">
                     <window.IconImage size={12}/> En fachada
                   </button>
+                  <button className={'neon-btn-ghost neon-btn-small'+(showColorear?' active':'')}
+                    onClick={()=>{ setShowColorear(!showColorear); setShowTrazos(false); setTrazoActivo(null); }}
+                    title="Asignar colores/perfiles distintos por trazo">
+                    <window.IconBulb size={12}/> {showColorear ? 'Listo' : 'Colorear'}
+                  </button>
                   <button className={'neon-btn-ghost neon-btn-small'+(showTrazos?' active':'')}
-                    onClick={()=>setShowTrazos(!showTrazos)}>
+                    onClick={()=>{ setShowTrazos(!showTrazos); setShowColorear(false); setTrazoActivo(null); }}>
                     <window.IconEdit size={12}/> {showTrazos ? 'Listo' : 'Excluir trazos'}
                   </button>
                   <button className="neon-btn-ghost neon-btn-small" onClick={resetSvg}>Cambiar</button>
@@ -1369,13 +1438,54 @@ function ModuleAnunciosNeon({ addToTicket }) {
               </div>
               <_NeonSvgViewer
                 svgHtml={svgFile.html} color={color}
-                excluded={excluded} onToggleEl={onToggleEl}
+                colorFor={colorDeTrazo}
+                excluded={excluded} onToggleEl={onClickTrazo}
                 onScan={onScan} showTrazos={showTrazos}
                 encendido={encendido}
+                trazoActivo={trazoActivo} coloreando={showColorear}
               />
               {showTrazos && (
                 <div className="neon-help">
                   Click en un trazo para marcarlo como "no lleva neón" (queda gris tenue).
+                </div>
+              )}
+              {showColorear && (
+                <div className="neon-color-panel">
+                  <div className="neon-color-help">
+                    {trazoActivo == null
+                      ? 'Click en un trazo del diseño para seleccionarlo, luego elige el color.'
+                      : `Trazo #${trazoActivo+1} seleccionado — elige el color a aplicar.`}
+                  </div>
+                  <div className="neon-swatches">
+                    {window.NEON_PERFILES.map(p => {
+                      const c = _colorPerfil(p);
+                      const activo = trazoActivo != null && (trazoPerfiles[trazoActivo] === p.id || (!trazoPerfiles[trazoActivo] && p.id === perfilId));
+                      return (
+                        <button key={p.id}
+                          className={'neon-swatch'+(activo?' current':'')}
+                          disabled={trazoActivo == null}
+                          onClick={()=>asignarPerfilATrazoActivo(p.id)}
+                          title={`${p.nombre} · ${p.color} · ${window.fmt(p.precioM)}/m`}>
+                          <span className="neon-swatch-dot" style={{background:c, boxShadow:`0 0 10px ${c}`}}/>
+                          <span className="neon-swatch-lbl">{p.color}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {trazoActivo != null && trazoPerfiles[trazoActivo] && (
+                    <button className="neon-btn-ghost neon-btn-small"
+                      onClick={()=>asignarPerfilATrazoActivo(null)}
+                      style={{marginTop:8}}>
+                      ↺ Volver al perfil global para este trazo
+                    </button>
+                  )}
+                  {Object.keys(trazoPerfiles).length > 0 && (
+                    <button className="neon-btn-ghost neon-btn-small"
+                      onClick={()=>{ setTrazoPerfiles({}); setTrazoActivo(null); }}
+                      style={{marginTop:8}}>
+                      ↺ Un solo color para todo
+                    </button>
+                  )}
                 </div>
               )}
             </>
@@ -1744,6 +1854,7 @@ function ModuleAnunciosNeon({ addToTicket }) {
             <div className="np-preview">
               <_NeonSvgViewer
                 svgHtml={svgFile.html} color={color}
+                colorFor={colorDeTrazo}
                 excluded={excluded} onToggleEl={()=>{}}
                 onScan={()=>{}} showTrazos={false}
                 encendido={true}
@@ -1751,8 +1862,12 @@ function ModuleAnunciosNeon({ addToTicket }) {
             </div>
             <div className="np-detalle">
               <div className="np-det-row"><span>Dimensiones</span><strong>{anchoCm} × {altoCm} cm</strong></div>
-              <div className="np-det-row"><span>Perfil de neón</span><strong>{perfil?.nombre} · {perfil?.color}</strong></div>
-              <div className="np-det-row"><span>Longitud de neón</span><strong>{result.Lm.toFixed(2)} m</strong></div>
+              <div className="np-det-row"><span>{tramos.length > 1 ? 'Colores de neón' : 'Perfil de neón'}</span>
+                <strong>{tramos.length > 1
+                  ? tramos.map(t => `${t.perfil.color} (${t.Lm.toFixed(1)}m)`).join(' · ')
+                  : `${perfil?.nombre} · ${perfil?.color}`}</strong>
+              </div>
+              <div className="np-det-row"><span>Longitud total de neón</span><strong>{result.Lm.toFixed(2)} m</strong></div>
               <div className="np-det-row"><span>Uniones/empalmes</span><strong>{result.uniones}</strong></div>
               <div className="np-det-row"><span>Base</span><strong>{baseMat.nombre} ({baseForma.nombre})</strong></div>
               <div className="np-det-row"><span>Fuente de poder</span><strong>{result.numFuentes} × {result.fuenteNombre}</strong></div>
@@ -1812,7 +1927,8 @@ function ModuleAnunciosNeon({ addToTicket }) {
 
       {fachadaOpen && svgFile && (
         <_NeonFachadaModal
-          svgHtml={svgFile.html} color={color} excluded={excluded}
+          svgHtml={svgFile.html} color={color} colorFor={colorDeTrazo}
+          excluded={excluded}
           onClose={()=>setFachadaOpen(false)}
         />
       )}
@@ -1822,6 +1938,7 @@ function ModuleAnunciosNeon({ addToTicket }) {
           <div className="neon-present-stage" onClick={(e)=>e.stopPropagation()}>
             <_NeonSvgViewer
               svgHtml={svgFile.html} color={color}
+              colorFor={colorDeTrazo}
               excluded={excluded} onToggleEl={()=>{}}
               onScan={()=>{}} showTrazos={false}
               encendido={true}

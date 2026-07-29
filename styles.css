@@ -3878,6 +3878,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 }
 .neon-canvas svg { display: block; width: 100%; height: 100%; padding: 20px; box-sizing: border-box; }
 .neon-canvas.adjusting { outline: 2px solid var(--orange); outline-offset: -2px; }
+.neon-canvas.coloreando { outline: 2px solid #b026ff; outline-offset: -2px; }
 .neon-canvas-empty {
   position: absolute; inset: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 6px; color: rgba(255,255,255,0.35);
@@ -3889,6 +3890,36 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   border-radius: var(--radius); padding: 8px 12px;
   font-size: 0.8rem; flex-shrink: 0;
 }
+
+/* Panel de colores por trazo (modo "Colorear") */
+.neon-color-panel {
+  background: rgba(176,38,255,0.05);
+  border: 1px solid rgba(176,38,255,0.25);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  flex-shrink: 0;
+}
+.neon-color-help {
+  font-size: 0.78rem; color: #b026ff; margin-bottom: 8px; font-weight: 500;
+}
+.neon-swatches {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.neon-swatch {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 6px 8px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer; transition: border-color .12s, transform .12s;
+  min-width: 60px;
+}
+.neon-swatch:hover:not(:disabled) { border-color: #b026ff; transform: translateY(-1px); }
+.neon-swatch:disabled { opacity: 0.5; cursor: not-allowed; }
+.neon-swatch.current { border-color: #b026ff; background: rgba(176,38,255,0.08); }
+.neon-swatch-dot {
+  display: block; width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.4);
+}
+.neon-swatch-lbl { font-size: 0.68rem; color: var(--text-2); }
 
 /* Modo presentación al cliente (pantalla completa, sin controles) */
 .neon-present-overlay {

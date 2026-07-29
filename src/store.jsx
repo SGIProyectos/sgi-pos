@@ -424,10 +424,7 @@ let NEON_PARAMS = (() => {
 //   params        parámetros generales del catálogo
 //   urgenciaMult  multiplicador final (1.0 normal, 1.2 rápido, etc.)
 // Devuelve el desglose completo. Sin lecturas de window, sin fetch, sin new Date.
-function calcularNeon({ Lm, uniones, perfil, fuente, dimensiones, base, params, urgenciaMult, manoObraOverride }) {
-  const L   = Math.max(0, Number(Lm) || 0);
-  const un  = Math.max(0, Math.floor(Number(uniones) || 0));
-  const P   = perfil || { precioM: 0, wattsM: 0 };
+function calcularNeon({ Lm, uniones, perfil, tramos, fuente, dimensiones, base, params, urgenciaMult, manoObraOverride }) {
   const p   = params || _NEON_PARAMS_DEFAULTS;
   const urg = Math.max(0.01, Number(urgenciaMult) || 1);
   const dim = dimensiones || { anchoCm: 0, altoCm: 0 };
@@ -436,9 +433,28 @@ function calcularNeon({ Lm, uniones, perfil, fuente, dimensiones, base, params, 
   // Fuente elegida (fallback a la primera del catálogo si no viene)
   const F = fuente || (p.fuentes || []).find(f => f.activo !== false) || { nombre:'Fuente', watts:100, precio:380 };
 
+  // Normalizar tramos: si viene un array de {perfil, Lm} lo usamos; si no, tratamos
+  // {perfil, Lm} como un solo tramo (retrocompatible con la firma anterior).
+  const rawTramos = Array.isArray(tramos) && tramos.length > 0
+    ? tramos
+    : [{ perfil: perfil || { precioM: 0, wattsM: 0 }, Lm }];
+  // Agrupar por id de perfil (por si el módulo entrega tramos duplicados del mismo perfil)
+  const grouped = new Map();
+  for (const t of rawTramos) {
+    const pf = t.perfil || { precioM: 0, wattsM: 0 };
+    const key = pf.id || pf.nombre + '·' + (pf.color || '') || '_';
+    const lm = Math.max(0, Number(t.Lm) || 0);
+    if (!grouped.has(key)) grouped.set(key, { perfil: pf, Lm: 0 });
+    grouped.get(key).Lm += lm;
+  }
+  const gTramos    = Array.from(grouped.values()).filter(t => t.Lm > 0);
+  const L          = gTramos.reduce((s, t) => s + t.Lm, 0);
+  const un         = Math.max(0, Math.floor(Number(uniones) || 0));
+  const P          = gTramos[0]?.perfil || perfil || { precioM: 0, wattsM: 0 };  // perfil "principal" para retrocompat
+  const wattsTotal = gTramos.reduce((s, t) => s + t.Lm * (t.perfil.wattsM || 0), 0);
+
   // Cuántas fuentes se necesitan según capacidad efectiva (watts × factor de seguridad)
   const capFuente  = (F.watts || 0) * p.fuenteFactor;
-  const wattsTotal = L * P.wattsM;
   const numFuentes = capFuente > 0 ? Math.max(L > 0 ? 1 : 0, Math.ceil(wattsTotal / capFuente)) : 0;
 
   // Base: dos modelos según cómo se compra el material.
@@ -500,12 +516,17 @@ function calcularNeon({ Lm, uniones, perfil, fuente, dimensiones, base, params, 
   const importeSoport = base?.incluirSoporte ? (p.soportePrecio || 0) : 0;
 
   // Insumos: partidas por metro/unidad + base + corte
-  const insumos = [
-    { concepto:'Neón LED',              cantidad:L,       unidad:'m',      unit:P.precioM,      importe:round2(L * P.precioM) },
-    { concepto:'Cable',                  cantidad:L,       unidad:'m',      unit:p.cableM,       importe:round2(L * p.cableM) },
-    { concepto:'Accesorios',             cantidad:L,       unidad:'m',      unit:p.accesM,       importe:round2(L * p.accesM) },
-    { concepto:F.nombre,                 cantidad:numFuentes, unidad:'pza', unit:F.precio,       importe:round2(numFuentes * (F.precio||0)) },
-  ];
+  const insumos = [];
+  // Una partida "Neón LED" por cada tramo/perfil distinto (si hay más de uno se ve el desglose)
+  for (const t of gTramos) {
+    const nom = t.perfil.color
+      ? `Neón LED · ${t.perfil.nombre || 'Manguera'} ${t.perfil.color}`
+      : `Neón LED · ${t.perfil.nombre || 'Manguera'}`;
+    insumos.push({ concepto:nom, cantidad:round2(t.Lm), unidad:'m', unit:t.perfil.precioM||0, importe:round2(t.Lm * (t.perfil.precioM||0)) });
+  }
+  insumos.push({ concepto:'Cable',       cantidad:round2(L),    unidad:'m',   unit:p.cableM, importe:round2(L * p.cableM) });
+  insumos.push({ concepto:'Accesorios',  cantidad:round2(L),    unidad:'m',   unit:p.accesM, importe:round2(L * p.accesM) });
+  insumos.push({ concepto:F.nombre,      cantidad:numFuentes,   unidad:'pza', unit:F.precio, importe:round2(numFuentes * (F.precio||0)) });
   if (importeBase > 0) {
     const unitBase = tipo === 'lamina' && bMat.precioLamina
       ? round2((bMat.precioLamina / ((bMat.laminaW||120) * (bMat.laminaH||240))) * 10000) // MXN/m² efectivo
