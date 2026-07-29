@@ -1079,8 +1079,8 @@ function _NeonFachadaModal({ svgHtml, color, colorFor, excluded, onClose }) {
               )}
             </label>
           ) : (
-            <div className="neon-fach-stage" ref={stageRef}
-              style={{backgroundImage:`url(${foto.url})`, aspectRatio:`${foto.w}/${foto.h}`}}>
+            <div className="neon-fach-stage" ref={stageRef}>
+              <img src={foto.url} alt="" className="neon-fach-bg" draggable={false}/>
               <div ref={neonRef}
                 className="neon-fach-overlay-neon"
                 style={{

@@ -4080,12 +4080,20 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
 @keyframes neonSpin { to { transform: rotate(360deg); } }
 .neon-fach-stage {
   position: relative;
+  display: inline-block;
   max-width: 100%; max-height: 100%;
-  width: auto; height: auto;
-  background-size: cover; background-position: center;
   border-radius: 6px;
   box-shadow: 0 8px 40px rgba(0,0,0,0.5);
   overflow: hidden;
+  line-height: 0;
+}
+.neon-fach-bg {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 160px);
+  width: auto; height: auto;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 .neon-fach-overlay-neon {
   position: absolute;
