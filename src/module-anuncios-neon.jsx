@@ -883,16 +883,52 @@ function _NeonFachadaModal({ svgHtml, color, colorFor, excluded, onClose }) {
   const [opacidad,   setOpacidad]   = React.useState(1);
   const [tamNeon,    setTamNeon]    = React.useState({ w: 320, h: 180 });
   const [descargando,setDescargando]= React.useState(false);
+  const [cargandoFoto, setCargandoFoto] = React.useState(false);
+  const [errorFoto, setErrorFoto] = React.useState('');
   const dragRef  = React.useRef(null);
   const stageRef = React.useRef(null);
   const neonRef  = React.useRef(null);
 
   const cargarFoto = (f) => {
-    if (!f || !f.type.startsWith('image/')) { alert('Sube una imagen (JPG, PNG).'); return; }
+    setErrorFoto('');
+    if (!f) return;
+    const nombre = (f.name || '').toLowerCase();
+    const esHeic = /\.(heic|heif)$/i.test(nombre) || /heic|heif/i.test(f.type || '');
+    if (esHeic) {
+      setErrorFoto('Los archivos HEIC/HEIF (formato default del iPhone) no se pueden mostrar en el navegador. Conviértelo a JPG antes de subir, o cambia el formato en tu iPhone: Ajustes → Cámara → Formatos → "Más compatible".');
+      return;
+    }
+    // Validación permisiva: si el MIME dice image/* o si tiene extensión de imagen conocida, intentamos cargarla
+    const esImagen = (f.type && f.type.startsWith('image/')) || /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(nombre);
+    if (!esImagen) {
+      setErrorFoto('El archivo no parece ser una imagen. Usa JPG o PNG.');
+      return;
+    }
+    // Aviso si el archivo es muy grande (más de 15 MB puede tardar o fallar por RAM)
+    if (f.size > 15 * 1024 * 1024) {
+      setErrorFoto(`La foto pesa ${(f.size/1024/1024).toFixed(1)} MB — es muy grande y puede fallar. Reduce el tamaño (máx recomendado 10 MB).`);
+      return;
+    }
+    setCargandoFoto(true);
     const rd = new FileReader();
+    rd.onerror = () => {
+      setCargandoFoto(false);
+      setErrorFoto('No se pudo leer el archivo. Intenta con otra imagen.');
+    };
     rd.onload = () => {
       const img = new Image();
-      img.onload = () => setFoto({ url: rd.result, w: img.naturalWidth, h: img.naturalHeight });
+      img.onerror = () => {
+        setCargandoFoto(false);
+        setErrorFoto('No se pudo interpretar la imagen. Prueba con JPG o PNG estándar.');
+      };
+      img.onload = () => {
+        setCargandoFoto(false);
+        if (!img.naturalWidth || !img.naturalHeight) {
+          setErrorFoto('La imagen no tiene dimensiones válidas.');
+          return;
+        }
+        setFoto({ url: rd.result, w: img.naturalWidth, h: img.naturalHeight });
+      };
       img.src = rd.result;
     };
     rd.readAsDataURL(f);
@@ -1022,11 +1058,25 @@ function _NeonFachadaModal({ svgHtml, color, colorFor, excluded, onClose }) {
         <div className="neon-fach-stage-wrap">
           {!foto ? (
             <label className="neon-fach-empty">
-              <input type="file" accept="image/*" style={{display:'none'}}
-                onChange={(e)=>cargarFoto(e.target.files?.[0])}/>
-              <window.IconImage size={48} stroke={1.2}/>
-              <div style={{marginTop:8, fontSize:'0.9rem'}}>Click para subir foto del muro</div>
-              <div style={{marginTop:4, fontSize:'0.75rem', opacity:0.6}}>JPG, PNG</div>
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{display:'none'}}
+                onChange={(e)=>{ cargarFoto(e.target.files?.[0]); e.target.value=''; }}/>
+              {cargandoFoto ? (
+                <>
+                  <div className="neon-fach-spinner"/>
+                  <div style={{marginTop:12, fontSize:'0.9rem'}}>Procesando imagen…</div>
+                </>
+              ) : (
+                <>
+                  <window.IconImage size={48} stroke={1.2}/>
+                  <div style={{marginTop:8, fontSize:'0.9rem'}}>Click para subir foto del muro</div>
+                  <div style={{marginTop:4, fontSize:'0.75rem', opacity:0.6}}>JPG, PNG, WEBP</div>
+                  {errorFoto && (
+                    <div style={{marginTop:14, fontSize:'0.78rem', color:'#ff6b6b', maxWidth:'380px', textAlign:'center', lineHeight:1.4}}>
+                      ⚠ {errorFoto}
+                    </div>
+                  )}
+                </>
+              )}
             </label>
           ) : (
             <div className="neon-fach-stage" ref={stageRef}
@@ -1058,10 +1108,13 @@ function _NeonFachadaModal({ svgHtml, color, colorFor, excluded, onClose }) {
           <div className="field">
             <label>Foto del muro</label>
             <label className="neon-btn-ghost neon-btn-small" style={{cursor:'pointer', textAlign:'center'}}>
-              <input type="file" accept="image/*" style={{display:'none'}}
-                onChange={(e)=>cargarFoto(e.target.files?.[0])}/>
-              {foto ? 'Cambiar foto' : 'Subir foto'}
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{display:'none'}}
+                onChange={(e)=>{ cargarFoto(e.target.files?.[0]); e.target.value=''; }}/>
+              {cargandoFoto ? 'Procesando…' : (foto ? 'Cambiar foto' : 'Subir foto')}
             </label>
+            {errorFoto && foto && (
+              <div style={{marginTop:8, fontSize:'0.72rem', color:'#ff6b6b'}}>⚠ {errorFoto}</div>
+            )}
           </div>
 
           <div className="field">
