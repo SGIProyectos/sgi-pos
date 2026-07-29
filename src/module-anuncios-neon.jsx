@@ -294,7 +294,7 @@ function _NeonUpload({ onSvg }) {
 }
 
 // ─── Visor con neón como STROKE (línea del color siguiendo contorno) ─────────
-function _NeonSvgViewer({ svgHtml, color, onScan, excluded, onToggleEl, showTrazos }) {
+function _NeonSvgViewer({ svgHtml, color, onScan, excluded, onToggleEl, showTrazos, encendido = true }) {
   const wrapRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -367,8 +367,17 @@ function _NeonSvgViewer({ svgHtml, color, onScan, excluded, onToggleEl, showTraz
         el.style.strokeLinecap  = 'round';
         el.style.filter = 'none';
         el.style.opacity = '1';
+      } else if (!encendido) {
+        // Modo "apagado": manguera sin luz, se ve como tubo gris sobre la base
+        el.style.fill = 'none';
+        el.style.stroke = 'rgba(210,210,215,0.55)';
+        el.style.strokeWidth = String(stroke);
+        el.style.strokeLinejoin = 'round';
+        el.style.strokeLinecap  = 'round';
+        el.style.filter = 'none';
+        el.style.opacity = '1';
       } else {
-        // Neón: núcleo casi blanco (vidrio iluminado) + halos del color puro
+        // Neón encendido: núcleo casi blanco (vidrio iluminado) + halos del color puro
         el.style.fill = 'rgba(255,255,255,0.04)';
         el.style.stroke = core;
         el.style.strokeWidth = String(stroke);
@@ -378,7 +387,7 @@ function _NeonSvgViewer({ svgHtml, color, onScan, excluded, onToggleEl, showTraz
         el.style.opacity = '1';
       }
     });
-  }, [svgHtml, color, excluded]);
+  }, [svgHtml, color, excluded, encendido]);
 
   const onClick = (e) => {
     if (!showTrazos) return;
@@ -749,6 +758,119 @@ function _NeonConfigModal({ onClose }) {
   );
 }
 
+// ─── Modal de proyectos (guardar / abrir) ────────────────────────────────────
+function _NeonProyectosModal({ mode, currentSnapshot, onClose, onLoad }) {
+  const [lista, setLista] = React.useState(() => window.storageLoad('sgi_neon_proyectos', []));
+  const [nombre, setNombre] = React.useState(currentSnapshot?.nombre || '');
+  const [cliente, setCliente] = React.useState(currentSnapshot?.cliente || '');
+  const [busqueda, setBusqueda] = React.useState('');
+
+  const guardar = () => {
+    if (!nombre.trim()) { alert('Escribe un nombre para el proyecto.'); return; }
+    if (!currentSnapshot?.svgFile) { alert('No hay diseño cargado que guardar.'); return; }
+    const proyecto = {
+      ...currentSnapshot,
+      id: window.uid(),
+      nombre: nombre.trim(),
+      cliente: cliente.trim(),
+      fecha: new Date().toISOString(),
+    };
+    const nueva = [proyecto, ...lista];
+    window.storageSave('sgi_neon_proyectos', nueva);
+    setLista(nueva);
+    onClose();
+  };
+
+  const borrar = (id) => {
+    if (!confirm('¿Borrar este proyecto?')) return;
+    const nueva = lista.filter(p => p.id !== id);
+    window.storageSave('sgi_neon_proyectos', nueva);
+    setLista(nueva);
+  };
+
+  const filtrada = lista.filter(p => {
+    if (!busqueda.trim()) return true;
+    const q = busqueda.toLowerCase();
+    return (p.nombre||'').toLowerCase().includes(q) || (p.cliente||'').toLowerCase().includes(q);
+  });
+
+  return (
+    <div className="cfg-modal-overlay" onClick={onClose}>
+      <div className="cfg-modal neon-cfg-modal" onClick={(e)=>e.stopPropagation()} style={{maxWidth:'720px'}}>
+        <div className="cfg-modal-head">
+          <span className="cfg-modal-title">
+            {mode === 'guardar' ? 'Guardar proyecto de neón' : 'Abrir proyecto guardado'}
+          </span>
+          <button className="cfg-modal-x" onClick={onClose}><window.IconX size={18}/></button>
+        </div>
+        <div className="cfg-modal-body" style={{padding:16}}>
+          {mode === 'guardar' ? (
+            <>
+              <div className="field" style={{marginBottom:12}}>
+                <label>Nombre del proyecto</label>
+                <input value={nombre} onChange={e=>setNombre(e.target.value)}
+                  placeholder="Ej: Logo Restaurante Alba" autoFocus
+                  style={{width:'100%'}}/>
+              </div>
+              <div className="field" style={{marginBottom:12}}>
+                <label>Cliente (opcional)</label>
+                <input value={cliente} onChange={e=>setCliente(e.target.value)}
+                  placeholder="Nombre del cliente"
+                  style={{width:'100%'}}/>
+              </div>
+              <div className="neon-hint">
+                Se guarda: diseño SVG, medidas, perfil, fuente, base y todos los ajustes actuales.
+                Podrás abrirlo desde <strong>Abrir proyecto</strong> para retomarlo sin recapturar.
+              </div>
+            </>
+          ) : (
+            <>
+              <input value={busqueda} onChange={e=>setBusqueda(e.target.value)}
+                placeholder="Buscar por nombre o cliente…"
+                style={{width:'100%', marginBottom:12}}/>
+              {filtrada.length === 0 ? (
+                <div className="neon-hint" style={{textAlign:'center', padding:20}}>
+                  {lista.length === 0 ? 'No hay proyectos guardados aún.' : 'Sin coincidencias.'}
+                </div>
+              ) : (
+                <div style={{maxHeight:'50vh', overflowY:'auto'}}>
+                  {filtrada.map(p => (
+                    <div key={p.id} className="neon-proyecto-item">
+                      <div style={{flex:1, minWidth:0}}>
+                        <div style={{fontWeight:600}}>{p.nombre}</div>
+                        <div className="neon-hint" style={{fontSize:'0.72rem'}}>
+                          {p.cliente && `${p.cliente} · `}
+                          {new Date(p.fecha).toLocaleDateString('es-MX')}
+                          {p.anchoCm > 0 && ` · ${p.anchoCm} cm`}
+                        </div>
+                      </div>
+                      <button className="neon-btn-ghost neon-btn-small"
+                        onClick={()=>{ onLoad(p); onClose(); }}>
+                        Abrir
+                      </button>
+                      <button className="neon-icon-btn" onClick={()=>borrar(p.id)} title="Borrar">
+                        <window.IconTrash size={13}/>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+        <div className="cfg-modal-foot">
+          <button className="cfg-btn-cancel" onClick={onClose}>Cerrar</button>
+          {mode === 'guardar' && (
+            <button className="cfg-btn-save" onClick={guardar}>
+              <window.IconSave size={15}/> Guardar
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Componente raíz del módulo (servicio, panel único) ──────────────────────
 function ModuleAnunciosNeon({ addToTicket }) {
   const [svgFile,   setSvgFile]   = React.useState(null);
@@ -758,7 +880,11 @@ function ModuleAnunciosNeon({ addToTicket }) {
   const [anchoCm,   setAnchoCm]   = React.useState(0);    // ancho real del anuncio
   const [showTrazos,setShowTrazos]= React.useState(false);// modo "excluir trazos"
   const [showCfg,   setShowCfg]   = React.useState(false);
-  const [uniones,   setUniones]   = React.useState(4);
+  const [uniones,   setUniones]   = React.useState(0);
+  const [unionesTocado, setUnionesTocado] = React.useState(false);
+  const [encendido, setEncendido] = React.useState(true);
+  const [presentando, setPresentando] = React.useState(false);
+  const [proyectoModal, setProyectoModal] = React.useState(null);  // null | 'guardar' | 'abrir'
   const [perfilId,  setPerfilId]  = React.useState(window.NEON_PERFILES[0]?.id || '');
   const [fuenteId,  setFuenteId]  = React.useState('auto');  // 'auto' = elegir por watts, o id específico
   const [urgId,     setUrgId]     = React.useState(window.NEON_PARAMS.urgencias[0]?.id || 'normal');
@@ -830,6 +956,28 @@ function ModuleAnunciosNeon({ addToTicket }) {
       .filter(e => Math.min(e.wCm, e.hCm) < alturaMinPerfilCm);
   }, [neonBboxes, excluded, scaleEff, alturaMinPerfilCm]);
 
+  // Perfil sugerido: el más chico (menor alturaMinCm) que sí cabe en el elemento más pequeño detectado.
+  // Solo se sugiere si el perfil actual NO cabe (elementosChicos > 0) y hay otro que sí.
+  const perfilSugerido = React.useMemo(() => {
+    if (!scaleEff || elementosChicos.length === 0) return null;
+    const activos = neonBboxes.filter(b => !excluded.includes(b.idx));
+    if (!activos.length) return null;
+    const minCm = Math.min(...activos.map(b => Math.min(b.w, b.h) * scaleEff));
+    const perfilesOrd = window.NEON_PERFILES.slice().sort((a,b) => (a.alturaMinCm||5) - (b.alturaMinCm||5));
+    const encaja = perfilesOrd.find(p => (p.alturaMinCm||5) <= minCm);
+    return (encaja && encaja.id !== perfilId) ? encaja : null;
+  }, [neonBboxes, excluded, scaleEff, elementosChicos, perfilId]);
+
+  // Uniones auto: 1 por cada trazo activo (cada trazo separado requiere al menos una conexión).
+  // Si el usuario tocó el input manualmente, se respeta su valor.
+  const unionesAuto = React.useMemo(() => {
+    const activos = neonBboxes.filter(b => !excluded.includes(b.idx)).length;
+    return Math.max(0, activos);
+  }, [neonBboxes, excluded]);
+  React.useEffect(() => {
+    if (!unionesTocado) setUniones(unionesAuto);
+  }, [unionesAuto, unionesTocado]);
+
   // Fuente: si 'auto', elige la más chica del catálogo (excluyendo pilas) que cubra los watts totales × factor de seguridad
   const wattsNeeded = Lm * (perfil?.wattsM || 0);
   const fuenteAuto = React.useMemo(() => {
@@ -858,12 +1006,56 @@ function ModuleAnunciosNeon({ addToTicket }) {
   const onScan = (found, bbs) => {
     setBboxes(bbs);
     setElements(found);
+  };
+  // Establecer un nuevo SVG (desde upload) reseteando el estado dependiente del archivo
+  const cargarSvgFile = (sf) => {
+    setSvgFile(sf);
     setExcluded([]);
+    setUnionesTocado(false);
+    setAnchoCm(0);
   };
   const onToggleEl = (idx) => setExcluded(x => x.includes(idx) ? x.filter(i => i !== idx) : [...x, idx]);
 
   const resetSvg = () => {
     setSvgFile(null); setElements([]); setBboxes([]); setExcluded([]); setAnchoCm(0);
+    setUnionesTocado(false);
+  };
+
+  // ESC para salir del modo presentación
+  React.useEffect(() => {
+    if (!presentando) return;
+    const onEsc = (e) => { if (e.key === 'Escape') setPresentando(false); };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [presentando]);
+
+  // Snapshot serializable del proyecto actual (para guardar)
+  const snapshotProyecto = () => ({
+    svgFile, anchoCm, excluded,
+    perfilId, fuenteId, urgId, baseMatId, baseFormaId,
+    incSoporte, cobrarDesperdicio, piezaCostoManual,
+    corteExtra, consumiblesPct, manoObraManual,
+    uniones, unionesTocado,
+  });
+
+  // Restaurar todos los estados desde un proyecto guardado
+  const cargarProyecto = (p) => {
+    setSvgFile(p.svgFile || null);
+    setExcluded(Array.isArray(p.excluded) ? p.excluded : []);
+    setAnchoCm(Number(p.anchoCm) || 0);
+    if (p.perfilId)   setPerfilId(p.perfilId);
+    if (p.fuenteId)   setFuenteId(p.fuenteId);
+    if (p.urgId)      setUrgId(p.urgId);
+    if (p.baseMatId)  setBaseMatId(p.baseMatId);
+    if (p.baseFormaId) setBaseFormaId(p.baseFormaId);
+    setIncSoporte(!!p.incSoporte);
+    setCobrarDesperdicio(p.cobrarDesperdicio !== false);
+    setPiezaCostoManual(p.piezaCostoManual ?? '');
+    setCorteExtra(Number(p.corteExtra) || 0);
+    if (typeof p.consumiblesPct === 'number') setConsumiblesPct(p.consumiblesPct);
+    setManoObraManual(p.manoObraManual ?? '');
+    setUniones(Number(p.uniones) || 0);
+    setUnionesTocado(!!p.unionesTocado);
   };
 
   const agregarTicket = () => {
@@ -885,7 +1077,7 @@ function ModuleAnunciosNeon({ addToTicket }) {
     addToTicket(item);
     // Reset básico para siguiente cotización (dejar el catálogo elegido)
     setSvgFile(null); setElements([]); setBboxes([]); setExcluded([]);
-    setAnchoCm(0); setUniones(4); setCorteExtra(0);
+    setAnchoCm(0); setUniones(0); setUnionesTocado(false); setCorteExtra(0);
     setConsumiblesPct(Math.round((window.NEON_PARAMS.consumiblesPct || 0.08) * 100));
     setManoObraManual('');
     setPiezaCostoManual('');
@@ -898,22 +1090,42 @@ function ModuleAnunciosNeon({ addToTicket }) {
           <h1 className="neon-svc-title">Anuncios Neón</h1>
           <p className="neon-svc-sub">Sube el diseño en SVG, captura el ancho real y agrega al ticket</p>
         </div>
-        <button className="neon-btn-primary" onClick={()=>setShowCfg(true)}
-          title="Configurar perfiles, materiales, insumos, urgencias, mano de obra">
-          <window.IconSettings size={15}/> Catálogo del módulo
-        </button>
+        <div style={{display:'flex', gap:8}}>
+          <button className="neon-btn-ghost" onClick={()=>setProyectoModal('abrir')}
+            title="Abrir un proyecto de neón guardado">
+            <window.IconFolder size={14}/> Abrir
+          </button>
+          <button className="neon-btn-ghost" onClick={()=>setProyectoModal('guardar')}
+            title="Guardar el diseño y ajustes actuales" disabled={!svgFile}>
+            <window.IconSave size={14}/> Guardar
+          </button>
+          <button className="neon-btn-primary" onClick={()=>setShowCfg(true)}
+            title="Configurar perfiles, materiales, insumos, urgencias, mano de obra">
+            <window.IconSettings size={15}/> Catálogo del módulo
+          </button>
+        </div>
       </div>
 
       <div className="neon-svc-grid">
         {/* Columna izquierda: SVG + medidas */}
         <div className="neon-svc-left">
           {!svgFile ? (
-            <_NeonUpload onSvg={setSvgFile}/>
+            <_NeonUpload onSvg={cargarSvgFile}/>
           ) : (
             <>
               <div className="neon-file-bar">
                 <span><window.IconFileText size={13}/> {svgFile.name}</span>
                 <div style={{display:'flex', gap:6}}>
+                  <button className={'neon-btn-ghost neon-btn-small'+(encendido?' active':'')}
+                    onClick={()=>setEncendido(!encendido)}
+                    title={encendido ? 'Ver como se ve apagado (de día)' : 'Ver encendido (de noche)'}>
+                    <window.IconBolt size={12}/> {encendido ? 'Encendido' : 'Apagado'}
+                  </button>
+                  <button className="neon-btn-ghost neon-btn-small"
+                    onClick={()=>setPresentando(true)}
+                    title="Mostrar al cliente en pantalla completa">
+                    <window.IconMaximize size={12}/> Presentar
+                  </button>
                   <button className={'neon-btn-ghost neon-btn-small'+(showTrazos?' active':'')}
                     onClick={()=>setShowTrazos(!showTrazos)}>
                     <window.IconEdit size={12}/> {showTrazos ? 'Listo' : 'Excluir trazos'}
@@ -925,6 +1137,7 @@ function ModuleAnunciosNeon({ addToTicket }) {
                 svgHtml={svgFile.html} color={color}
                 excluded={excluded} onToggleEl={onToggleEl}
                 onScan={onScan} showTrazos={showTrazos}
+                encendido={encendido}
               />
               {showTrazos && (
                 <div className="neon-help">
@@ -1030,8 +1243,18 @@ function ModuleAnunciosNeon({ addToTicket }) {
                 <div style={{marginTop:6, fontSize:'0.72rem'}}>
                   Con esa medida la manguera no puede doblarse lo suficiente para formar la letra o figura.
                   Opciones: <strong>subir el ancho</strong> del anuncio (Ajustar manualmente),
-                  o <strong>cambiar a un perfil más delgado</strong> (ej. Mini 6mm).
+                  o <strong>cambiar a un perfil más delgado</strong>.
                 </div>
+                {perfilSugerido && (
+                  <button
+                    className="neon-btn-ghost neon-btn-small"
+                    style={{marginTop:8}}
+                    onClick={()=>setPerfilId(perfilSugerido.id)}
+                    title={`Perfil ${perfilSugerido.nombre} tiene altura mínima ${perfilSugerido.alturaMinCm} cm`}
+                  >
+                    ↳ Usar {perfilSugerido.nombre} {perfilSugerido.color} ({window.fmt(perfilSugerido.precioM)}/m)
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -1168,11 +1391,22 @@ function ModuleAnunciosNeon({ addToTicket }) {
               <div>
                 <label className="neon-mini-lbl">Uniones</label>
                 <div className="neon-uniones">
-                  <button onClick={()=>setUniones(Math.max(0,uniones-1))}><window.IconMinus size={13}/></button>
+                  <button onClick={()=>{ setUniones(Math.max(0,uniones-1)); setUnionesTocado(true); }}><window.IconMinus size={13}/></button>
                   <input type="number" min="0" value={uniones}
-                    onChange={e=>setUniones(Math.max(0,parseInt(e.target.value)||0))} className="mono"/>
-                  <button onClick={()=>setUniones(uniones+1)}><window.IconPlus size={13}/></button>
+                    onChange={e=>{ setUniones(Math.max(0,parseInt(e.target.value)||0)); setUnionesTocado(true); }} className="mono"/>
+                  <button onClick={()=>{ setUniones(uniones+1); setUnionesTocado(true); }}><window.IconPlus size={13}/></button>
                 </div>
+                {!unionesTocado && unionesAuto > 0 && (
+                  <div className="neon-hint" style={{marginTop:3}}>
+                    Auto: 1 por trazo. Ajusta si sabes cuántas necesitas.
+                  </div>
+                )}
+                {unionesTocado && (
+                  <button className="neon-btn-ghost neon-btn-small" style={{marginTop:3, fontSize:'0.7rem', padding:'2px 6px'}}
+                    onClick={()=>setUnionesTocado(false)}>
+                    ↺ Volver a auto ({unionesAuto})
+                  </button>
+                )}
               </div>
               <div>
                 <label className="neon-mini-lbl">Urgencia</label>
@@ -1225,6 +1459,39 @@ function ModuleAnunciosNeon({ addToTicket }) {
       </div>
 
       {showCfg && <_NeonConfigModal onClose={()=>setShowCfg(false)}/>}
+
+      {proyectoModal && (
+        <_NeonProyectosModal
+          mode={proyectoModal}
+          currentSnapshot={snapshotProyecto()}
+          onClose={()=>setProyectoModal(null)}
+          onLoad={cargarProyecto}
+        />
+      )}
+
+      {presentando && svgFile && (
+        <div className="neon-present-overlay" onClick={()=>setPresentando(false)}>
+          <div className="neon-present-stage" onClick={(e)=>e.stopPropagation()}>
+            <_NeonSvgViewer
+              svgHtml={svgFile.html} color={color}
+              excluded={excluded} onToggleEl={()=>{}}
+              onScan={()=>{}} showTrazos={false}
+              encendido={true}
+            />
+          </div>
+          <div className="neon-present-info">
+            <div className="mono" style={{fontSize:'0.95rem'}}>
+              {anchoCm && altoCm ? `${anchoCm} × ${altoCm} cm` : '—'}
+              {' · '}{perfil?.nombre} {perfil?.color}
+              {Lm > 0 && `  ·  ${Lm.toFixed(2)} m de neón`}
+            </div>
+          </div>
+          <button className="neon-present-close" onClick={()=>setPresentando(false)} title="Cerrar (ESC)">
+            <window.IconX size={20}/>
+          </button>
+          <div className="neon-present-hint">Click fuera o ESC para cerrar</div>
+        </div>
+      )}
     </div>
   );
 }

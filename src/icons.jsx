@@ -58,6 +58,9 @@ const IconBuilding = (p) => <Icon {...p}><rect x="3" y="9" width="18" height="12
 const IconBulb = (p) => <Icon {...p}><path d="M9 21h6"/><path d="M12 3a6 6 0 0 1 6 6c0 2.2-1.2 4.1-3 5.2V17a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-2.8C7.2 13.1 6 11.2 6 9a6 6 0 0 1 6-6z"/></Icon>;
 const IconFileText = (p) => <Icon {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></Icon>;
 const IconAlertTriangle = (p) => <Icon {...p}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></Icon>;
+const IconMaximize = (p) => <Icon {...p}><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></Icon>;
+const IconSave = (p) => <Icon {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></Icon>;
+const IconFolder = (p) => <Icon {...p}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></Icon>;
 
 Object.assign(window, {
   Icon, IconCopy, IconPrinter, IconScan, IconBook, IconShield, IconLayers, IconImage,
@@ -66,4 +69,5 @@ Object.assign(window, {
   IconChevronRight, IconClock, IconPause, IconSearch, IconRotate, IconPercent, IconLayout,
   IconHash, IconBolt, IconRuler, IconShoppingCart, IconMore, IconPrint,
   IconSettings, IconBuilding, IconBulb, IconFileText, IconAlertTriangle,
+  IconMaximize, IconSave, IconFolder,
 });
